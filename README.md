@@ -1,4 +1,4 @@
-# PedSense-AI 🚶‍♂️🔍
+# PedSense-AI
 > **Predicting Pedestrian Crossing Intent through Multi-Stage Computer Vision**
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
@@ -82,7 +82,5 @@ src/pedsense/
 ├── processing/      # JAAD parsing & dataset cleaning
 ├── models/          # YOLO, ResNet, and LSTM architectures
 └── demo.py          # Gradio Web Interface logic
-
-```
 
 ```
