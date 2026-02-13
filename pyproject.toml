@@ -1,0 +1,20 @@
+[project]
+name = "pedsense"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "JCProg", email = "jeffrey.chong28@gmail.com" }
+]
+requires-python = ">=3.12.10"
+dependencies = [
+    "typer>=0.15",
+    "rich>=13",
+]
+
+[project.scripts]
+pedsense = "pedsense.cli:app"
+
+[build-system]
+requires = ["uv_build>=0.10.2,<0.11.0"]
+build-backend = "uv_build"
