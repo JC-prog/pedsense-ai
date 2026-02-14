@@ -36,11 +36,14 @@ uv run pedsense train -m resnet-lstm -n my_resnet -e 30 -b 8
 
 ### Parameters
 
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `epochs` | 30 | Training epochs |
-| `batch_size` | 8 | Batch size (lower due to memory) |
-| `learning_rate` | 1e-4 | AdamW learning rate |
+| Parameter | Trainer Default | CLI Default | Description |
+|-----------|----------------|-------------|-------------|
+| `epochs` | 30 | 50 | Training epochs |
+| `batch_size` | 8 | 16 | Batch size (lower recommended due to sequence memory) |
+| `learning_rate` | 1e-4 | — | AdamW learning rate |
+
+!!! note
+    The CLI defaults (`-e 50 -b 16`) override the trainer defaults. To use the recommended trainer values, pass them explicitly: `-e 30 -b 8`.
 
 ### Training Details
 

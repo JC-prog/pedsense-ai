@@ -51,9 +51,17 @@ Annotations are parsed automatically during `preprocess yolo` and `preprocess re
 @dataclass
 class BoundingBox:
     frame: int
-    xtl: float, ytl: float, xbr: float, ybr: float
-    occluded: bool, outside: bool
-    track_id: str, action: str, cross: str, look: str, occlusion: str
+    xtl: float
+    ytl: float
+    xbr: float
+    ybr: float
+    occluded: bool
+    outside: bool
+    track_id: str
+    action: str       # "standing" or "walking"
+    cross: str        # "crossing" or "not-crossing"
+    look: str         # "looking" or "not-looking"
+    occlusion: str    # "none", "part", or "full"
 
 @dataclass
 class Track:
@@ -62,8 +70,13 @@ class Track:
 
 @dataclass
 class VideoAnnotation:
-    video_id: str, num_frames: int, width: int, height: int
-    time_of_day: str, weather: str, location: str
+    video_id: str
+    num_frames: int
+    width: int
+    height: int
+    time_of_day: str    # "daytime", "nighttime"
+    weather: str        # "cloudy", "clear", etc.
+    location: str       # "plaza", "intersection", etc.
     tracks: list[Track]
 ```
 

@@ -29,6 +29,8 @@ Fine-tune YOLO26 on the JAAD crossing intent dataset.
 
 **Requires:** `data/processed/yolo/data.yaml` (run `preprocess yolo` first)
 
+**Base model:** Downloaded to `models/base/{model_variant}.pt` on first run.
+
 ---
 
 ## pedsense.train.resnet_lstm

@@ -16,6 +16,7 @@ from rich.console import Console
 from rich.progress import track
 
 from pedsense.config import (
+    BASE_MODELS_DIR,
     CUSTOM_MODELS_DIR,
     FRAMES_DIR,
     YOLO_DIR,
@@ -204,7 +205,8 @@ def train_hybrid(
     else:
         console.print("[yellow]Stage 1: Training YOLO26 pedestrian detector...[/yellow]")
         data_yaml = _prepare_hybrid_yolo_data()
-        yolo = YOLO("yolo26n.pt")
+        BASE_MODELS_DIR.mkdir(parents=True, exist_ok=True)
+        yolo = YOLO(str(BASE_MODELS_DIR / "yolo26n.pt"))
         yolo.train(
             data=str(data_yaml),
             epochs=yolo_epochs,

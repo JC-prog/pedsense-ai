@@ -35,7 +35,7 @@ uv run pedsense train -m yolo -n experiment1 -e 100 -b 16
 # Output: models/custom/experiment1_20260214_153000/
 ```
 
-Uses Ultralytics YOLO26 nano (`yolo26n.pt`) as the base model. Ultralytics automatically downloads the pretrained weights on first run.
+Uses Ultralytics YOLO26 nano (`yolo26n.pt`) as the base model. Pretrained weights are downloaded to `models/base/` on first run.
 
 ### ResNet+LSTM
 

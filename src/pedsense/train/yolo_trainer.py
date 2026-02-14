@@ -4,7 +4,7 @@ from pathlib import Path
 import torch
 from ultralytics import YOLO
 
-from pedsense.config import CUSTOM_MODELS_DIR, YOLO_DIR
+from pedsense.config import BASE_MODELS_DIR, CUSTOM_MODELS_DIR, YOLO_DIR
 
 
 def train_yolo(
@@ -36,8 +36,9 @@ def train_yolo(
     if device is None:
         device = "0" if torch.cuda.is_available() else "cpu"
 
-    # Load pretrained model
-    model = YOLO(f"{model_variant}.pt")
+    # Load pretrained model (download to models/base/ if not cached)
+    BASE_MODELS_DIR.mkdir(parents=True, exist_ok=True)
+    model = YOLO(str(BASE_MODELS_DIR / f"{model_variant}.pt"))
 
     # Train
     model.train(

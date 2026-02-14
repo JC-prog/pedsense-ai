@@ -45,7 +45,7 @@ PedSense-AI is a computer vision framework for predicting pedestrian crossing in
 # Install uv (if you don't have it)
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Clone and install
+# Clone and install (includes CUDA PyTorch for GPU training)
 git clone https://github.com/JCProg/pedsense-ai.git
 cd pedsense-ai
 uv sync

@@ -6,7 +6,7 @@ End-to-end single-stage detector that detects pedestrians and classifies crossin
 
 YOLO26 is the latest [Ultralytics](https://docs.ultralytics.com/) model, optimized for edge and real-time inference. PedSense fine-tunes the nano variant (`yolo26n.pt`) on the JAAD dataset.
 
-**Base model:** `yolo26n.pt` (auto-downloaded by Ultralytics on first use)
+**Base model:** `yolo26n.pt` (auto-downloaded to `models/base/` on first training run)
 
 **Classes:**
 
