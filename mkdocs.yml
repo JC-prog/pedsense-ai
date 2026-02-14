@@ -1,0 +1,72 @@
+site_name: PedSense-AI
+site_description: Pedestrian crossing intent prediction using the JAAD dataset
+site_url: https://jcprog.github.io/pedsense-ai/
+repo_url: https://github.com/JCProg/pedsense-ai
+repo_name: JCProg/pedsense-ai
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - content.code.copy
+    - search.highlight
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Installation: getting-started/installation.md
+    - Quickstart: getting-started/quickstart.md
+  - CLI Reference:
+    - Overview: cli/index.md
+    - setup: cli/setup.md
+    - preprocess: cli/preprocess.md
+    - train: cli/train.md
+    - demo: cli/demo.md
+  - Models:
+    - Overview: models/index.md
+    - YOLO26: models/yolo.md
+    - ResNet+LSTM: models/resnet-lstm.md
+    - Hybrid: models/hybrid.md
+  - Dataset Pipeline:
+    - Overview: dataset/index.md
+    - Raw JAAD Format: dataset/raw-format.md
+    - Preprocessing: dataset/preprocessing.md
+    - YOLO Format: dataset/yolo-format.md
+    - ResNet Format: dataset/resnet-format.md
+  - API Reference:
+    - Overview: api/index.md
+    - Config: api/config.md
+    - Processing: api/processing.md
+    - Training: api/training.md
+    - Demo: api/demo-module.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.details
+  - toc:
+      permalink: true
+  - tables
+  - attr_list
+
+plugins:
+  - search
