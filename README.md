@@ -4,6 +4,7 @@
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![Python: 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/)
 [![Manager: uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
+[![Docs](https://img.shields.io/badge/docs-mkdocs-blue)](https://jcprog.github.io/pedsense-ai/)
 
 PedSense is a high-performance computer vision framework designed to predict pedestrian crossing intent. By leveraging the **JAAD (Joint Attention in Autonomous Driving)** dataset, this project benchmarks three distinct architectural approaches to determine if a pedestrian is likely to cross the road or remain waiting at the curb.
 
@@ -13,11 +14,9 @@ PedSense is a high-performance computer vision framework designed to predict ped
 
 PedSense evaluates three distinct models to identify the optimal balance between inference speed and behavioral accuracy:
 
-1. **YOLOv26 (End-to-End Detector):** A single-stage pipeline fine-tuned to classify "Crossing" vs. "Waiting" directly within the object detection head. Optimized for maximum FPS.
+1. **YOLO26 (End-to-End Detector):** A single-stage pipeline fine-tuned to classify "Crossing" vs. "Not Crossing" directly within the object detection head. Optimized for maximum FPS.
 2. **ResNet-50 + LSTM (Temporal Classifier):** A two-stage approach using ResNet for spatial feature extraction from pedestrian crops and an LSTM (Long Short-Term Memory) network to analyze movement patterns over multiple frames.
 3. **The PedSense Hybrid (YOLO + ResNet):** A coordinated pipeline where YOLO acts as the **"Proposal Engine"** (finding and tracking pedestrians) and a dedicated ResNet-50 acts as the **"Decision Engine"** (providing high-resolution classification of the extracted crops).
-
-
 
 ---
 
@@ -28,6 +27,7 @@ PedSense evaluates three distinct models to identify the optimal balance between
 * **CLI Framework:** [Typer](https://typer.tiangolo.com/) & [Rich](https://github.com/Textualize/rich) for a professional, color-coded terminal experience.
 * **UI/Demo:** [Gradio](https://gradio.app/) (Hosted on Hugging Face Spaces).
 * **Model Registry:** [Hugging Face Hub](https://huggingface.co/) for versioned model weight storage.
+* **Documentation:** [MkDocs Material](https://squidfunk.github.io/mkdocs-material/).
 
 ---
 
@@ -38,12 +38,11 @@ Ensure you have `uv` installed. If not, get it via `curl -LsSf https://astral.sh
 
 ```bash
 # Clone and enter the project
-git clone [https://github.com/your-username/pedsense-ai.git](https://github.com/your-username/pedsense-ai.git)
+git clone https://github.com/JCProg/pedsense-ai.git
 cd pedsense-ai
 
 # Synchronize the environment
 uv sync
-
 ```
 
 ### 2. Usage
@@ -51,15 +50,17 @@ uv sync
 Manage the entire pipeline via the `pedsense` CLI entry point.
 
 ```bash
-# Prepare and clean the JAAD dataset
-uv run pedsense clean --input ./data/raw
+# Set up project directories
+uv run pedsense setup
+
+# Extract frames and prepare datasets
+uv run pedsense preprocess all
 
 # Train a model (yolo, resnet-lstm, or hybrid)
-uv run pedsense train --model yolo
+uv run pedsense train --model yolo --name my_experiment
 
 # Launch the Gradio web demo
 uv run pedsense demo
-
 ```
 
 ---
@@ -78,9 +79,17 @@ This project is licensed under the **GNU Affero General Public License v3.0 (AGP
 
 ```text
 src/pedsense/
-├── cli.py           # Typer CLI entry point
-├── processing/      # JAAD parsing & dataset cleaning
-├── models/          # YOLO, ResNet, and LSTM architectures
-└── demo.py          # Gradio Web Interface logic
-
+├── cli.py              # Typer CLI entry point
+├── config.py           # Path constants & defaults
+├── processing/         # JAAD parsing & dataset conversion
+│   ├── annotations.py  # XML annotation parser
+│   ├── frames.py       # Video frame extraction
+│   ├── yolo_format.py  # YOLO dataset converter
+│   └── resnet_format.py # ResNet+LSTM sequence converter
+├── train/              # Model training pipelines
+│   ├── yolo_trainer.py    # YOLO26 fine-tuning
+│   ├── resnet_lstm.py     # ResNet+LSTM model definition
+│   ├── resnet_trainer.py  # ResNet+LSTM training loop
+│   └── hybrid_trainer.py  # Hybrid pipeline trainer
+└── demo.py             # Gradio web interface
 ```

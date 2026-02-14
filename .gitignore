@@ -36,6 +36,9 @@ htmlcov/
 # Jupyter
 .ipynb_checkpoints
 
+# MkDocs
+site/
+
 # Data and model artifacts (keep structure with .gitkeep)
 data/*
 !data/.gitkeep

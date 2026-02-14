@@ -10,10 +10,22 @@ requires-python = ">=3.12.10"
 dependencies = [
     "typer>=0.15",
     "rich>=13",
+    "opencv-python>=4.10",
+    "torch>=2.5",
+    "torchvision>=0.20",
+    "ultralytics>=8.3",
+    "gradio>=5.0",
+    "pandas>=2.2",
+    "huggingface-hub>=0.27",
 ]
 
 [project.scripts]
 pedsense = "pedsense.cli:app"
+
+[dependency-groups]
+dev = [
+    "mkdocs-material>=9.6",
+]
 
 [build-system]
 requires = ["uv_build>=0.10.2,<0.11.0"]
