@@ -25,6 +25,7 @@ pedsense = "pedsense.cli:app"
 [dependency-groups]
 dev = [
     "mkdocs-material>=9.6",
+    "pytest>=8.0",
 ]
 
 [[tool.uv.index]]
