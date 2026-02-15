@@ -16,6 +16,20 @@ CLASS_NAMES = ["not-crossing", "crossing"]
 COLORS = {"not-crossing": (0, 255, 0), "crossing": (0, 0, 255)}  # BGR: green, red
 
 
+def _find_yolo_weights(model_dir: Path) -> Path | None:
+    """Find the best available YOLO weights file in an Ultralytics output directory."""
+    weights_dir = model_dir / "weights"
+    if not weights_dir.is_dir():
+        return None
+    # Prefer best.pt, then last.pt, then any .pt file
+    for name in ("best.pt", "last.pt"):
+        candidate = weights_dir / name
+        if candidate.exists():
+            return candidate
+    pt_files = list(weights_dir.glob("*.pt"))
+    return pt_files[0] if pt_files else None
+
+
 def _list_available_models() -> list[str]:
     """List all model directories in models/custom/."""
     if not CUSTOM_MODELS_DIR.exists():
@@ -24,7 +38,7 @@ def _list_available_models() -> list[str]:
     for d in sorted(CUSTOM_MODELS_DIR.iterdir(), reverse=True):
         if d.is_dir() and (d / "config.json").exists():
             models.append(d.name)
-        elif d.is_dir() and (d / "weights" / "best.pt").exists():
+        elif d.is_dir() and _find_yolo_weights(d) is not None:
             # Ultralytics YOLO output structure
             models.append(d.name)
     return models
@@ -44,8 +58,8 @@ def _detect_model_type(model_dir: Path) -> str:
             config = json.load(f)
         return config.get("model_type", "yolo")
 
-    # Fallback: check for YOLO weights
-    if (model_dir / "weights" / "best.pt").exists():
+    # Fallback: check for YOLO weights directory
+    if _find_yolo_weights(model_dir) is not None:
         return "yolo"
     if (model_dir / "best.pt").exists():
         return "resnet-lstm"
@@ -54,9 +68,9 @@ def _detect_model_type(model_dir: Path) -> str:
 
 def _load_yolo_model(model_dir: Path) -> YOLO:
     """Load a trained YOLO model."""
-    weights = model_dir / "weights" / "best.pt"
-    if not weights.exists():
-        weights = model_dir / "best.pt"
+    weights = _find_yolo_weights(model_dir)
+    if weights is None:
+        raise FileNotFoundError(f"No YOLO weights found in {model_dir / 'weights'}")
     return YOLO(str(weights))
 
 

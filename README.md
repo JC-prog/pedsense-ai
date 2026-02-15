@@ -1,6 +1,7 @@
 # PedSense-AI
 > **Predicting Pedestrian Crossing Intent through Multi-Stage Computer Vision**
 
+[![Version: 1.0.1](https://img.shields.io/badge/version-1.0.1-green.svg)](CHANGELOG.md)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![Python: 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/)
 [![Manager: uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
@@ -167,6 +168,7 @@ pedsense-ai/
 │   └── custom/                # Trained model outputs
 ├── docs/                      # MkDocs documentation source
 ├── mkdocs.yml                 # MkDocs configuration
+├── CHANGELOG.md               # Version history
 └── pyproject.toml
 ```
 

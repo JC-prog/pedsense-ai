@@ -61,9 +61,19 @@ The demo auto-detects the model type from `config.json` in the model directory:
 
 ## Helper Functions
 
+### `_find_yolo_weights(model_dir: Path) -> Path | None`
+
+Finds the best available YOLO weights file in a model's `weights/` directory. Uses a fallback priority:
+
+1. `best.pt` (preferred)
+2. `last.pt`
+3. Any other `.pt` file
+
+Returns `None` if no weights are found.
+
 ### `_list_available_models() -> list[str]`
 
-Lists all model directories in `models/custom/` that contain either `config.json` or `weights/best.pt`. Sorted by name (most recent first).
+Lists all model directories in `models/custom/` that contain either `config.json` or any `.pt` weights in a `weights/` subdirectory. Sorted by name (most recent first).
 
 ### `_get_latest_model() -> str | None`
 
@@ -71,4 +81,4 @@ Returns the first model from `_list_available_models()`, or `None` if no models 
 
 ### `_detect_model_type(model_dir: Path) -> str`
 
-Reads `config.json` to determine model type. Falls back to checking for YOLO weight files.
+Reads `config.json` to determine model type. Falls back to checking for YOLO weight files via `_find_yolo_weights()`.

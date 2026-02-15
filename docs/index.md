@@ -2,6 +2,7 @@
 
 **Predicting Pedestrian Crossing Intent through Multi-Stage Computer Vision**
 
+[![Version: 1.0.1](https://img.shields.io/badge/version-1.0.1-green.svg)](https://github.com/JCProg/pedsense-ai/blob/main/CHANGELOG.md)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![Python: 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/)
 
@@ -39,3 +40,4 @@ YOLO26 acts as the **Proposal Engine** (detecting pedestrians), and ResNet-50 ac
 - [Model Architectures](models/index.md) — Detailed model documentation
 - [Dataset Pipeline](dataset/index.md) — JAAD data processing
 - [API Reference](api/index.md) — Module-level documentation
+- [Changelog](changelog.md) — Version history and release notes

@@ -54,6 +54,7 @@ nav:
     - Processing: api/processing.md
     - Training: api/training.md
     - Demo: api/demo-module.md
+  - Changelog: changelog.md
 
 markdown_extensions:
   - admonition

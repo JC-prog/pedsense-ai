@@ -51,3 +51,12 @@ uv run pedsense demo -p 8080
 
 !!! note
     ResNet+LSTM models require a separate pedestrian detector and are not directly supported in the demo. Use a YOLO or Hybrid model instead.
+
+## Model Discovery
+
+The demo automatically discovers trained models in `models/custom/`. A model is listed if it has:
+
+- A `config.json` file (ResNet+LSTM, Hybrid), **or**
+- Any `.pt` weights in a `weights/` subdirectory (YOLO)
+
+For YOLO models, weights are loaded with fallback priority: `best.pt` > `last.pt` > any other `.pt` file. This means renamed weight files are still discovered correctly.
