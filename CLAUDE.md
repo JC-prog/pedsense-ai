@@ -26,9 +26,11 @@ uv run pedsense train -m yolo -n my_yolo -e 50 -b 16       # Train YOLO26
 uv run pedsense train -m resnet-lstm -n my_resnet -e 30     # Train ResNet+LSTM
 uv run pedsense train -m hybrid -n my_hybrid                # Train Hybrid pipeline
 uv run pedsense demo                                        # Launch Gradio demo
-```
 
-No test suite or linter is configured yet.
+# Run tests
+uv sync --group dev                                          # Install dev dependencies (pytest)
+uv run pytest tests/ -v                                      # Run all unit tests
+```
 
 ## Architecture
 

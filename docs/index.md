@@ -2,7 +2,7 @@
 
 **Predicting Pedestrian Crossing Intent through Multi-Stage Computer Vision**
 
-[![Version: 1.0.1](https://img.shields.io/badge/version-1.0.1-green.svg)](https://github.com/JCProg/pedsense-ai/blob/main/CHANGELOG.md)
+[![Version: 1.0.2](https://img.shields.io/badge/version-1.0.2-green.svg)](https://github.com/JCProg/pedsense-ai/blob/main/CHANGELOG.md)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![Python: 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/)
 

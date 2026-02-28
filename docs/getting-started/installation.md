@@ -95,10 +95,23 @@ data/raw/
 
 ## Development Setup
 
-To build documentation locally:
+Install dev dependencies (pytest, mkdocs):
 
 ```bash
 uv sync --group dev
+```
+
+### Run Tests
+
+```bash
+uv run pytest tests/ -v
+```
+
+Tests cover demo model discovery helpers and CVAT XML annotation parsing. No GPU or dataset required.
+
+### Build Documentation
+
+```bash
 uv run mkdocs serve
 ```
 

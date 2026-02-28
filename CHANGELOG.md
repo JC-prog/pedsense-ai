@@ -13,6 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Standalone demo app using `onnxruntime` (no PyTorch dependency required)
 - Lighter deployment footprint for inference-only environments
 
+## [1.0.2] - 2026-02-15
+
+### Added
+
+- Unit test suite with pytest (`tests/test_demo_helpers.py`, `tests/test_annotations.py`)
+- pytest added to dev dependencies
+
 ## [1.0.1] - 2026-02-15
 
 ### Fixed

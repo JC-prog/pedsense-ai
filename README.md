@@ -1,7 +1,7 @@
 # PedSense-AI
 > **Predicting Pedestrian Crossing Intent through Multi-Stage Computer Vision**
 
-[![Version: 1.0.1](https://img.shields.io/badge/version-1.0.1-green.svg)](CHANGELOG.md)
+[![Version: 1.0.2](https://img.shields.io/badge/version-1.0.2-green.svg)](CHANGELOG.md)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![Python: 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/)
 [![Manager: uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
@@ -33,6 +33,7 @@ PedSense-AI is a computer vision framework for predicting pedestrian crossing in
 | Deep Learning | [PyTorch](https://pytorch.org/) & [Ultralytics](https://github.com/ultralytics/ultralytics) |
 | CLI | [Typer](https://typer.tiangolo.com/) & [Rich](https://github.com/Textualize/rich) |
 | Demo UI | [Gradio](https://gradio.app/) |
+| Testing | [pytest](https://docs.pytest.org/) |
 | Model Registry | [Hugging Face Hub](https://huggingface.co/) |
 | Documentation | [MkDocs Material](https://squidfunk.github.io/mkdocs-material/) |
 
@@ -166,11 +167,25 @@ pedsense-ai/
 ├── models/
 │   ├── base/                  # Downloaded pretrained weights
 │   └── custom/                # Trained model outputs
+├── tests/
+│   ├── test_demo_helpers.py  # Demo utility function tests
+│   └── test_annotations.py   # XML annotation parser tests
 ├── docs/                      # MkDocs documentation source
 ├── mkdocs.yml                 # MkDocs configuration
 ├── CHANGELOG.md               # Version history
 └── pyproject.toml
 ```
+
+---
+
+## Testing
+
+```bash
+uv sync --group dev
+uv run pytest tests/ -v
+```
+
+Tests cover demo model discovery helpers and CVAT XML annotation parsing. No GPU or dataset required.
 
 ---
 
