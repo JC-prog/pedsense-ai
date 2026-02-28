@@ -6,11 +6,14 @@ from rich.progress import track as rtrack
 from pedsense.config import CLIPS_DIR, FRAMES_DIR
 
 
-def extract_frames(video_id: str | None = None) -> None:
+def extract_frames(video_id: str | None = None, fps: float | None = None) -> None:
     """Extract frames from MP4 videos to data/raw/frames/{video_id}/frame_{N:06d}.jpg.
 
     If video_id is provided, only extract for that video.
     Skips videos whose frame directory already exists and is non-empty.
+
+    If fps is provided, only every Nth frame is saved where N = round(native_fps / fps).
+    Original frame indices are preserved in filenames so annotation lookups remain valid.
     """
     FRAMES_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -38,14 +41,18 @@ def extract_frames(video_id: str | None = None) -> None:
         if not cap.isOpened():
             raise RuntimeError(f"Cannot open video: {video_path}")
 
+        native_fps = cap.get(cv2.CAP_PROP_FPS)
+        interval = max(1, round(native_fps / fps)) if fps and native_fps > 0 else 1
+
         frame_idx = 0
         try:
             while True:
                 ret, frame = cap.read()
                 if not ret:
                     break
-                out_path = out_dir / f"frame_{frame_idx:06d}.jpg"
-                cv2.imwrite(str(out_path), frame, [cv2.IMWRITE_JPEG_QUALITY, 95])
+                if frame_idx % interval == 0:
+                    out_path = out_dir / f"frame_{frame_idx:06d}.jpg"
+                    cv2.imwrite(str(out_path), frame, [cv2.IMWRITE_JPEG_QUALITY, 95])
                 frame_idx += 1
         finally:
             cap.release()

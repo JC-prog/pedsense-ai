@@ -36,13 +36,23 @@ def preprocess(
         "--video", "-v",
         help="Process a single video (e.g., video_0001). Default: all videos.",
     ),
+    fps: float = typer.Option(
+        None,
+        "--fps",
+        help="Target FPS for frame extraction (e.g. 10, 15). Default: all frames at native FPS.",
+    ),
 ):
     """Extract frames and prepare datasets from raw JAAD data."""
     from pedsense.processing import extract_frames, convert_to_yolo, convert_to_resnet
 
     if step in ("all", "frames"):
+        if fps is not None:
+            console.print(
+                f"[bold yellow]Frame downsampling enabled (target {fps} FPS). "
+                "ResNet+LSTM sequence coverage may be reduced.[/bold yellow]"
+            )
         console.print("[bold cyan]Extracting frames...[/bold cyan]")
-        extract_frames(video_id=video_id)
+        extract_frames(video_id=video_id, fps=fps)
         console.print("[bold green]Frame extraction complete.[/bold green]")
 
     if step in ("all", "yolo"):
