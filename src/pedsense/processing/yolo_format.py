@@ -12,20 +12,34 @@ from pedsense.config import (
     TRAIN_SPLIT,
     RANDOM_SEED,
 )
-from pedsense.processing.annotations import load_all_annotations, ATTRIBUTE_LABELS
+from pedsense.processing.annotations import load_all_annotations, ATTRIBUTE_LABELS, PEDESTRIAN_LABELS
 
 
-def convert_to_yolo(train_ratio: float = TRAIN_SPLIT, attribute: str = "cross") -> Path:
+def convert_to_yolo(
+    train_ratio: float = TRAIN_SPLIT,
+    attribute: str = "cross",
+    track_labels: list[str] | None = None,
+) -> Path:
     """Convert all annotations to YOLO format.
 
     Split at the video level to prevent data leakage.
     Returns path to data.yaml.
 
     Args:
-        attribute: Annotation attribute to classify on. Must be a key in ATTRIBUTE_LABELS.
-                   Run 'pedsense attributes' to list options.
+        attribute: Annotation attribute to classify on for pedestrian-type tracks.
+                   Must be a key in ATTRIBUTE_LABELS. Run 'pedsense attributes' to list options.
+        track_labels: Track label types to include. Pedestrian variants (pedestrian, ped, people)
+                      are classified by `attribute`; all others become additional detection classes
+                      appended after the attribute classes. Default None = ["pedestrian"] only.
     """
-    labels = ATTRIBUTE_LABELS[attribute]
+    # Resolve which track labels to process
+    if track_labels is None:
+        track_labels = ["pedestrian"]
+
+    attr_classes = ATTRIBUTE_LABELS[attribute]
+    ped_set = set(PEDESTRIAN_LABELS) & set(track_labels)
+    extra_labels = [t for t in track_labels if t not in PEDESTRIAN_LABELS]
+    all_names = attr_classes + extra_labels
 
     # Create output dirs
     for split in ("train", "val"):
@@ -49,16 +63,23 @@ def convert_to_yolo(train_ratio: float = TRAIN_SPLIT, attribute: str = "cross") 
 
     for vid_id, ann in annotations.items():
         for trk in ann.tracks:
-            if trk.label != "pedestrian":
-                continue
-            for box in trk.boxes:
-                label_value = getattr(box, attribute)
-                if label_value not in labels:
-                    continue
-                cls_id = labels.index(label_value)
-                frame_labels[vid_id][box.frame].append(
-                    (cls_id, box.xtl, box.ytl, box.xbr, box.ybr)
-                )
+            if trk.label in ped_set:
+                # Pedestrian variant: classify by behavioral attribute
+                for box in trk.boxes:
+                    label_value = getattr(box, attribute)
+                    if label_value not in attr_classes:
+                        continue
+                    cls_id = attr_classes.index(label_value)
+                    frame_labels[vid_id][box.frame].append(
+                        (cls_id, box.xtl, box.ytl, box.xbr, box.ybr)
+                    )
+            elif trk.label in extra_labels:
+                # Non-pedestrian object: class ID = position in extra_labels list
+                cls_id = len(attr_classes) + extra_labels.index(trk.label)
+                for box in trk.boxes:
+                    frame_labels[vid_id][box.frame].append(
+                        (cls_id, box.xtl, box.ytl, box.xbr, box.ybr)
+                    )
 
     # Process each video
     for vid_id in track(sorted(frame_labels.keys()), description="Converting to YOLO..."):
@@ -103,8 +124,8 @@ def convert_to_yolo(train_ratio: float = TRAIN_SPLIT, attribute: str = "cross") 
         "path": str(YOLO_DIR.resolve()),
         "train": "images/train",
         "val": "images/val",
-        "nc": len(labels),
-        "names": labels,
+        "nc": len(all_names),
+        "names": all_names,
     }
     with open(data_yaml, "w") as f:
         yaml.dump(config, f, default_flow_style=False)

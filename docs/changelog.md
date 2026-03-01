@@ -13,6 +13,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Standalone demo app using `onnxruntime` (no PyTorch dependency required)
 - Lighter deployment footprint for inference-only environments
 
+## [1.2.0] - 2026-03-01
+
+### Added
+
+- `--track-labels / -t` option for `pedsense preprocess` — select which track label types to include (repeatable: `-t pedestrian -t traffic_light`)
+- Multi-class YOLO detection: non-pedestrian tracks (`traffic_light`, `crosswalk`) are appended as additional YOLO classes after the behavioral attribute classes
+- `PEDESTRIAN_LABELS` constant in `pedsense.processing.annotations` — the three pedestrian-variant track labels (`pedestrian`, `ped`, `people`) that support behavioral attribute classification
+- `TRACK_LABELS` constant listing all known JAAD track label types
+- `pedsense attributes` now shows both behavioral attributes and track label types
+- `convert_to_resnet()` accepts `ped_labels` to include `ped` and `people` variants in ResNet+LSTM sequences
+
 ## [1.1.0] - 2026-03-01
 
 ### Added

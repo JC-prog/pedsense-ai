@@ -1329,7 +1329,7 @@ wheels = [
 
 [[package]]
 name = "pedsense"
-version = "1.0.1"
+version = "1.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "gradio" },

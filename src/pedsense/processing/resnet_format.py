@@ -16,7 +16,7 @@ from pedsense.config import (
     TRAIN_SPLIT,
     RANDOM_SEED,
 )
-from pedsense.processing.annotations import load_all_annotations, ATTRIBUTE_LABELS
+from pedsense.processing.annotations import load_all_annotations, ATTRIBUTE_LABELS, PEDESTRIAN_LABELS
 
 
 def convert_to_resnet(
@@ -25,6 +25,7 @@ def convert_to_resnet(
     crop_size: tuple[int, int] = CROP_SIZE,
     train_ratio: float = TRAIN_SPLIT,
     attribute: str = "cross",
+    ped_labels: list[str] | None = None,
 ) -> Path:
     """Create cropped pedestrian sequences for ResNet+LSTM training.
 
@@ -33,7 +34,11 @@ def convert_to_resnet(
     Args:
         attribute: Annotation attribute to classify on. Must be a key in ATTRIBUTE_LABELS.
                    Run 'pedsense attributes' to list options.
+        ped_labels: Pedestrian-type track labels to include. Only labels that are also in
+                    PEDESTRIAN_LABELS are accepted (non-pedestrian types have no behavioral
+                    attributes). Default None = ["pedestrian"] only.
     """
+    ped_set = set(ped_labels) & set(PEDESTRIAN_LABELS) if ped_labels else {"pedestrian"}
     # Create output dirs
     for split in ("train", "val"):
         (RESNET_DIR / "sequences" / split).mkdir(parents=True, exist_ok=True)
@@ -59,7 +64,7 @@ def convert_to_resnet(
             continue
 
         for trk in ann.tracks:
-            if trk.label != "pedestrian":
+            if trk.label not in ped_set:
                 continue
 
             # Sort boxes by frame, skip occluded

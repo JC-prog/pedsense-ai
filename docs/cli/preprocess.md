@@ -20,7 +20,8 @@ uv run pedsense preprocess [STEP] [OPTIONS]
 |--------|-------|---------|-------------|
 | `--video TEXT` | `-v` | — | Process a single video (e.g., `video_0001`). Default: all videos |
 | `--fps FLOAT` | — | — | Target FPS for frame extraction (e.g. `10`, `15`). Default: native FPS |
-| `--attribute TEXT` | `-a` | `cross` | Annotation attribute to classify on. Run `pedsense attributes` to see options |
+| `--attribute TEXT` | `-a` | `cross` | Behavioral attribute for pedestrian classification. Run `pedsense attributes` to see options |
+| `--track-labels TEXT` | `-t` | — | Track label types to include. Repeat for multiple. Default: `pedestrian` only. Run `pedsense attributes` to see options |
 
 ## Steps
 
@@ -51,20 +52,37 @@ Output: `data/raw/frames/{video_id}/frame_{N:06d}.jpg`
 
 Parses XML annotations and creates a YOLO-compatible dataset.
 
+**Behavioral attribute classification (pedestrian tracks):**
+
 ```bash
-# Default: classify by crossing intent
+# Default: classify pedestrians by crossing intent
 uv run pedsense preprocess yolo
 
 # Classify by gaze direction
 uv run pedsense preprocess yolo --attribute look
 
-# Classify by body movement
-uv run pedsense preprocess yolo --attribute action
+# Include ped and people variants alongside pedestrian
+uv run pedsense preprocess yolo -t pedestrian -t ped -t people
 ```
 
-Output: `data/processed/yolo/` with `data.yaml`, `images/`, and `labels/` directories.
+**Multi-class detection (pedestrians + environment objects):**
 
-The `data.yaml` `names` field reflects the chosen attribute's class values. Run `pedsense attributes` to see all options.
+```bash
+# Pedestrian crossing intent + traffic lights + crosswalks
+uv run pedsense preprocess yolo -t pedestrian -t traffic_light -t crosswalk
+# data.yaml: nc=4, names=[not-crossing, crossing, traffic_light, crosswalk]
+
+# All track types with gaze classification
+uv run pedsense preprocess yolo --attribute look -t pedestrian -t traffic_light -t crosswalk
+# data.yaml: nc=4, names=[not-looking, looking, traffic_light, crosswalk]
+```
+
+**Class ID scheme:**
+
+- Pedestrian-variant tracks (`pedestrian`, `ped`, `people`) → class IDs derived from `--attribute` values
+- Non-pedestrian tracks (`traffic_light`, `crosswalk`) → appended class IDs after attribute classes
+
+Output: `data/processed/yolo/` with `data.yaml`, `images/`, and `labels/` directories.
 
 !!! important
     Requires frames to be extracted first. Run `preprocess frames` before `preprocess yolo`.
@@ -74,42 +92,56 @@ The `data.yaml` `names` field reflects the chosen attribute's class values. Run 
 Creates 16-frame pedestrian crop sequences for temporal classification.
 
 ```bash
-# Default: classify by crossing intent
+# Default: classify by crossing intent (pedestrian tracks only)
 uv run pedsense preprocess resnet
 
 # Classify by gaze direction
 uv run pedsense preprocess resnet --attribute look
+
+# Include ped and people variants alongside pedestrian
+uv run pedsense preprocess resnet -t pedestrian -t ped -t people
 ```
 
 Output: `data/processed/resnet/` with `labels.csv` and `sequences/` directory.
 
-Labels in `labels.csv` reflect the chosen attribute's class values via majority vote over each 16-frame window.
+!!! note
+    Non-pedestrian track types (`traffic_light`, `crosswalk`) are always ignored for ResNet+LSTM — they have no behavioral attributes to classify on.
 
 ### `all` — Full Pipeline
 
-Runs all three steps sequentially with the same attribute applied to both YOLO and ResNet conversion.
+Runs all three steps sequentially.
 
 ```bash
-# Default (cross)
+# Default (cross, pedestrian only)
 uv run pedsense preprocess all
 
-# Full pipeline for action classification
-uv run pedsense preprocess all --attribute action
+# Full pipeline including ped/people variants
+uv run pedsense preprocess all -t pedestrian -t ped -t people
+
+# Multi-class YOLO + ResNet with action attribute
+uv run pedsense preprocess all --attribute action -t pedestrian -t traffic_light
 ```
 
 ## Examples
 
 ```bash
-# List available attributes before preprocessing
+# List all available attributes and track labels
 uv run pedsense attributes
 
-# Standard preprocessing (crossing intent)
+# Standard preprocessing (crossing intent, pedestrian only)
 uv run pedsense preprocess all
 
-# Lightweight dataset at 10 FPS for teammates
+# Lightweight dataset at 10 FPS
 uv run pedsense preprocess frames --fps 10
 
-# Train on looking vs not-looking instead of crossing
-uv run pedsense preprocess yolo --attribute look
-uv run pedsense preprocess resnet --attribute look
+# Multi-class YOLO: detect pedestrian intent + traffic lights + crosswalks
+uv run pedsense preprocess yolo -t pedestrian -t traffic_light -t crosswalk
+
+# Broader pedestrian coverage (include all variants)
+uv run pedsense preprocess yolo -t pedestrian -t ped -t people
+uv run pedsense preprocess resnet -t pedestrian -t ped -t people
+
+# Error: unknown track label
+uv run pedsense preprocess yolo -t vehicle
+# → Unknown track labels: ['vehicle']. Run 'pedsense attributes' to see options.
 ```

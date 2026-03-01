@@ -23,7 +23,23 @@ ATTRIBUTE_LABELS: dict[str, list[str]] = {
 
 Maps each supported JAAD behavioral attribute to its ordered list of class values. The list order determines class IDs (index 0, 1, …) for both YOLO labels and ResNet+LSTM training targets.
 
-Use `pedsense attributes` from the CLI to display this at runtime.
+#### `PEDESTRIAN_LABELS`
+
+```python
+PEDESTRIAN_LABELS: list[str] = ["pedestrian", "ped", "people"]
+```
+
+Track label types that represent pedestrians and support behavioral attribute classification. All variants produce bounding boxes with the same class ID scheme (derived from `ATTRIBUTE_LABELS`).
+
+#### `TRACK_LABELS`
+
+```python
+TRACK_LABELS: list[str] = ["pedestrian", "ped", "people", "traffic_light", "crosswalk"]
+```
+
+All known JAAD track label types. Pedestrian variants (first three) are classified by behavioral attribute; environment objects (`traffic_light`, `crosswalk`) become additional YOLO detection classes when selected.
+
+Use `pedsense attributes` from the CLI to display all constants at runtime.
 
 ### Dataclasses
 
@@ -51,7 +67,7 @@ class BoundingBox:
 ```python
 @dataclass
 class Track:
-    label: str                      # "pedestrian", "ped", or "people"
+    label: str                      # e.g. "pedestrian", "ped", "people", "traffic_light"
     boxes: list[BoundingBox]        # Per-frame bounding boxes
 ```
 
@@ -123,7 +139,7 @@ Extract frames from MP4 videos using OpenCV.
 
 ### Functions
 
-#### `convert_to_yolo(train_ratio: float = 0.8, attribute: str = "cross") -> Path`
+#### `convert_to_yolo(train_ratio: float = 0.8, attribute: str = "cross", track_labels: list[str] | None = None) -> Path`
 
 Convert JAAD annotations to YOLO format.
 
@@ -132,17 +148,29 @@ Convert JAAD annotations to YOLO format.
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `train_ratio` | `float` | `0.8` | Fraction of videos for training |
-| `attribute` | `str` | `"cross"` | Annotation attribute to classify on. Must be a key in `ATTRIBUTE_LABELS`. |
+| `attribute` | `str` | `"cross"` | Behavioral attribute for pedestrian classification. Must be a key in `ATTRIBUTE_LABELS`. |
+| `track_labels` | `list[str] \| None` | `None` | Track label types to include. `None` = `["pedestrian"]` only (legacy behavior). |
 
 **Returns:** Path to `data.yaml`
+
+**Class ID scheme:**
+
+- Pedestrian variants (`pedestrian`, `ped`, `people`) → class IDs from `ATTRIBUTE_LABELS[attribute]` (e.g. `not-crossing=0`, `crossing=1`)
+- Non-pedestrian tracks (`traffic_light`, `crosswalk`) → appended class IDs starting after the attribute classes
+
+Example with `attribute="cross"`, `track_labels=["pedestrian", "traffic_light", "crosswalk"]`:
+
+```yaml
+nc: 4
+names: [not-crossing, crossing, traffic_light, crosswalk]
+```
 
 **Behavior:**
 
 - Splits at video level (not frame level) to prevent data leakage
-- Class names and IDs derived from `ATTRIBUTE_LABELS[attribute]`
 - Copies images from `data/raw/frames/` to `data/processed/yolo/images/`
 - Writes normalized YOLO labels to `.txt` files
-- Generates `data.yaml` with `nc` and `names` matching the chosen attribute
+- Generates `data.yaml` reflecting the full class list
 
 ---
 
@@ -152,7 +180,7 @@ Convert JAAD annotations to YOLO format.
 
 ### Functions
 
-#### `convert_to_resnet(sequence_length: int = 16, stride: int = 8, crop_size: tuple[int, int] = (224, 224), train_ratio: float = 0.8, attribute: str = "cross") -> Path`
+#### `convert_to_resnet(sequence_length: int = 16, stride: int = 8, crop_size: tuple[int, int] = (224, 224), train_ratio: float = 0.8, attribute: str = "cross", ped_labels: list[str] | None = None) -> Path`
 
 Create cropped pedestrian sequences for ResNet+LSTM training.
 
@@ -164,7 +192,8 @@ Create cropped pedestrian sequences for ResNet+LSTM training.
 | `stride` | `int` | `8` | Sliding window stride |
 | `crop_size` | `tuple[int, int]` | `(224, 224)` | Output crop dimensions |
 | `train_ratio` | `float` | `0.8` | Fraction of videos for training |
-| `attribute` | `str` | `"cross"` | Annotation attribute to classify on. Must be a key in `ATTRIBUTE_LABELS`. |
+| `attribute` | `str` | `"cross"` | Behavioral attribute to classify on. Must be a key in `ATTRIBUTE_LABELS`. |
+| `ped_labels` | `list[str] \| None` | `None` | Pedestrian-type track labels to include. Only labels in `PEDESTRIAN_LABELS` are accepted; non-pedestrian types are always excluded. `None` = `["pedestrian"]` only. |
 
 **Returns:** Path to `labels.csv`
 
@@ -175,3 +204,4 @@ Create cropped pedestrian sequences for ResNet+LSTM training.
 - Labels each sequence by majority vote of `attribute` value across the window
 - Skips occluded frames
 - Same video-level split as YOLO converter
+- Non-pedestrian track types are silently ignored regardless of `ped_labels`

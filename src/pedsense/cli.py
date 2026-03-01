@@ -27,11 +27,18 @@ def setup():
 
 @app.command()
 def attributes():
-    """List all supported annotation attributes and their class values."""
-    from pedsense.processing.annotations import ATTRIBUTE_LABELS
+    """List annotation attributes, class values, and track label types."""
+    from pedsense.processing.annotations import ATTRIBUTE_LABELS, PEDESTRIAN_LABELS, TRACK_LABELS
 
+    console.print("[bold]Behavioral attributes[/bold] (use with --attribute):")
     for attr, labels in ATTRIBUTE_LABELS.items():
-        console.print(f"[bold cyan]{attr}[/bold cyan]: {labels}")
+        console.print(f"  [bold cyan]{attr}[/bold cyan]: {labels}")
+
+    console.print()
+    console.print("[bold]Track label types[/bold] (use with --track-labels):")
+    for label in TRACK_LABELS:
+        tag = " [dim](pedestrian variant)[/dim]" if label in PEDESTRIAN_LABELS else ""
+        console.print(f"  [bold cyan]{label}[/bold cyan]{tag}")
 
 
 @app.command()
@@ -53,12 +60,22 @@ def preprocess(
     attribute: str = typer.Option(
         "cross",
         "--attribute", "-a",
-        help="Annotation attribute to classify on. Run 'pedsense attributes' to see options.",
+        help="Annotation attribute to classify on for pedestrian tracks. Run 'pedsense attributes' to see options.",
+    ),
+    track_labels: list[str] | None = typer.Option(
+        None,
+        "--track-labels", "-t",
+        help=(
+            "Track label types to include. Repeat for multiple: -t pedestrian -t traffic_light. "
+            "Pedestrian variants (pedestrian, ped, people) are classified by --attribute; "
+            "others become additional YOLO detection classes. "
+            "Default: pedestrian only. Run 'pedsense attributes' to see options."
+        ),
     ),
 ):
     """Extract frames and prepare datasets from raw JAAD data."""
     from pedsense.processing import extract_frames, convert_to_yolo, convert_to_resnet
-    from pedsense.processing.annotations import ATTRIBUTE_LABELS
+    from pedsense.processing.annotations import ATTRIBUTE_LABELS, TRACK_LABELS
 
     if step in ("all", "yolo", "resnet") and attribute not in ATTRIBUTE_LABELS:
         console.print(
@@ -66,6 +83,15 @@ def preprocess(
             "Run 'pedsense attributes' to see options.[/bold red]"
         )
         raise typer.Exit(1)
+
+    if track_labels:
+        unknown = [t for t in track_labels if t not in TRACK_LABELS]
+        if unknown:
+            console.print(
+                f"[bold red]Unknown track labels: {unknown}. "
+                "Run 'pedsense attributes' to see options.[/bold red]"
+            )
+            raise typer.Exit(1)
 
     if step in ("all", "frames"):
         if fps is not None:
@@ -79,12 +105,12 @@ def preprocess(
 
     if step in ("all", "yolo"):
         console.print("[bold cyan]Converting to YOLO format...[/bold cyan]")
-        data_yaml = convert_to_yolo(attribute=attribute)
+        data_yaml = convert_to_yolo(attribute=attribute, track_labels=track_labels or None)
         console.print(f"[bold green]YOLO dataset ready: {data_yaml}[/bold green]")
 
     if step in ("all", "resnet"):
         console.print("[bold cyan]Converting to ResNet+LSTM format...[/bold cyan]")
-        labels_csv = convert_to_resnet(attribute=attribute)
+        labels_csv = convert_to_resnet(attribute=attribute, ped_labels=track_labels or None)
         console.print(f"[bold green]ResNet dataset ready: {labels_csv}[/bold green]")
 
 

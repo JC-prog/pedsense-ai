@@ -1,6 +1,6 @@
 # pedsense attributes
 
-List all supported annotation attributes and their class values.
+List annotation attributes, class values, and track label types.
 
 ## Synopsis
 
@@ -10,18 +10,31 @@ uv run pedsense attributes
 
 ## Description
 
-Prints each JAAD behavioral attribute alongside its ordered class values. The order of class values is significant — it determines the class ID mapping used when generating YOLO labels and ResNet+LSTM training data.
+Prints two sections:
+
+1. **Behavioral attributes** — per-box properties used for classification (pass to `--attribute`)
+2. **Track label types** — object categories from the XML annotations (pass to `--track-labels`)
 
 ## Output
 
 ```
-cross:     ['not-crossing', 'crossing']
-action:    ['standing', 'walking']
-look:      ['not-looking', 'looking']
-occlusion: ['none', 'part', 'full']
+Behavioral attributes (use with --attribute):
+  cross:     ['not-crossing', 'crossing']
+  action:    ['standing', 'walking']
+  look:      ['not-looking', 'looking']
+  occlusion: ['none', 'part', 'full']
+
+Track label types (use with --track-labels):
+  pedestrian  (pedestrian variant)
+  ped         (pedestrian variant)
+  people      (pedestrian variant)
+  traffic_light
+  crosswalk
 ```
 
-## Attributes
+## Behavioral Attributes
+
+Behavioral attributes are per-frame properties of a pedestrian bounding box. Their class value order determines YOLO class IDs.
 
 | Attribute | Classes | Description |
 |-----------|---------|-------------|
@@ -30,22 +43,41 @@ occlusion: ['none', 'part', 'full']
 | `look` | `not-looking`, `looking` | Whether the pedestrian is looking towards the vehicle |
 | `occlusion` | `none`, `part`, `full` | Degree of occlusion |
 
-## Usage with preprocess
+## Track Label Types
 
-Pass the attribute name to `pedsense preprocess` with `--attribute`:
+Track labels are the object category assigned to each annotation track in the JAAD XML.
+
+| Track Label | Type | Description |
+|-------------|------|-------------|
+| `pedestrian` | Pedestrian variant | Primary pedestrian label; supports all behavioral attributes |
+| `ped` | Pedestrian variant | Alternate pedestrian label; same behavioral attributes |
+| `people` | Pedestrian variant | Group pedestrian label; same behavioral attributes |
+| `traffic_light` | Environment object | Traffic light; no behavioral attributes |
+| `crosswalk` | Environment object | Crosswalk marking; no behavioral attributes |
+
+**Pedestrian variants** are classified by the chosen `--attribute` (e.g. `cross`, `action`).
+
+**Environment objects** (`traffic_light`, `crosswalk`) are added as additional YOLO detection classes appended after the behavioral attribute classes. They cannot be used for ResNet+LSTM training.
+
+## Usage
 
 ```bash
-# Default — classify by crossing intent
+# Classify pedestrians by crossing intent (default)
 uv run pedsense preprocess yolo
 
 # Classify by gaze direction
 uv run pedsense preprocess yolo --attribute look
-uv run pedsense preprocess resnet --attribute look
 
-# Classify by body movement
-uv run pedsense preprocess yolo --attribute action
-uv run pedsense preprocess resnet --attribute action
+# Include ped and people variants alongside pedestrian
+uv run pedsense preprocess yolo -t pedestrian -t ped -t people
+
+# Multi-class: pedestrian intent + traffic lights + crosswalks
+uv run pedsense preprocess yolo -t pedestrian -t traffic_light -t crosswalk
+# → data.yaml: nc=4, names=[not-crossing, crossing, traffic_light, crosswalk]
 ```
 
 !!! note
-    The selected attribute affects which class IDs are written into YOLO `.txt` files and which label is assigned to each ResNet sequence. Train models using the same attribute that was used during preprocessing.
+    The selected `--attribute` affects class IDs for pedestrian-type tracks. Train your model with the same attribute that was used during preprocessing.
+
+!!! note
+    For ResNet+LSTM, only pedestrian-variant tracks are ever included regardless of `--track-labels`. Non-pedestrian objects have no behavioral attributes to classify.

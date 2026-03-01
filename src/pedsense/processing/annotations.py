@@ -15,6 +15,12 @@ ATTRIBUTE_LABELS: dict[str, list[str]] = {
     "occlusion": ["none", "part", "full"],
 }
 
+# Track label types that are pedestrian variants and support behavioral attributes.
+PEDESTRIAN_LABELS: list[str] = ["pedestrian", "ped", "people"]
+
+# All known JAAD track label types (pedestrian variants + environment objects).
+TRACK_LABELS: list[str] = ["pedestrian", "ped", "people", "traffic_light", "crosswalk"]
+
 
 @dataclass
 class BoundingBox:
