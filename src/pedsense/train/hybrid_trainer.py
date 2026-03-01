@@ -19,13 +19,13 @@ from pedsense.config import (
     BASE_MODELS_DIR,
     CUSTOM_MODELS_DIR,
     FRAMES_DIR,
-    YOLO_DIR,
     CROP_SIZE,
     TRAIN_SPLIT,
     RANDOM_SEED,
 )
 from pedsense.processing.annotations import load_all_annotations
 from pedsense.train.resnet_lstm import ResNetClassifier
+from pedsense.train.yolo_trainer import _prepare_detector_data
 
 console = Console()
 
@@ -48,82 +48,6 @@ class HybridCropDataset(Dataset):
         if self.transform:
             img = self.transform(img)
         return img, label
-
-
-def _prepare_hybrid_yolo_data() -> Path:
-    """Create a 1-class (pedestrian-only) YOLO dataset from existing annotations.
-
-    Returns path to data.yaml for the 1-class dataset.
-    """
-    import random
-    import yaml
-
-    hybrid_yolo_dir = YOLO_DIR.parent / "yolo_hybrid"
-
-    for split in ("train", "val"):
-        (hybrid_yolo_dir / "images" / split).mkdir(parents=True, exist_ok=True)
-        (hybrid_yolo_dir / "labels" / split).mkdir(parents=True, exist_ok=True)
-
-    annotations = load_all_annotations()
-    video_ids = sorted(annotations.keys())
-    random.seed(RANDOM_SEED)
-    random.shuffle(video_ids)
-    split_idx = int(len(video_ids) * TRAIN_SPLIT)
-    train_videos = set(video_ids[:split_idx])
-
-    for vid_id in track(sorted(annotations.keys()), description="Preparing hybrid YOLO data..."):
-        ann = annotations[vid_id]
-        split = "train" if vid_id in train_videos else "val"
-        frames_dir = FRAMES_DIR / vid_id
-
-        if not frames_dir.exists():
-            continue
-
-        # Collect all pedestrian boxes per frame (all labels, 1 class)
-        frame_boxes: dict[int, list[tuple[float, float, float, float]]] = {}
-        for trk in ann.tracks:
-            for box in trk.boxes:
-                frame_boxes.setdefault(box.frame, []).append(
-                    (box.xtl, box.ytl, box.xbr, box.ybr)
-                )
-
-        for frame_num, boxes in frame_boxes.items():
-            src_img = frames_dir / f"frame_{frame_num:06d}.jpg"
-            if not src_img.exists():
-                continue
-
-            img_name = f"{vid_id}_frame_{frame_num:06d}.jpg"
-            dst_img = hybrid_yolo_dir / "images" / split / img_name
-            label_name = f"{vid_id}_frame_{frame_num:06d}.txt"
-            dst_label = hybrid_yolo_dir / "labels" / split / label_name
-
-            if not dst_img.exists():
-                shutil.copy2(src_img, dst_img)
-
-            with open(dst_label, "w") as f:
-                for xtl, ytl, xbr, ybr in boxes:
-                    x_center = ((xtl + xbr) / 2) / ann.width
-                    y_center = ((ytl + ybr) / 2) / ann.height
-                    width = (xbr - xtl) / ann.width
-                    height = (ybr - ytl) / ann.height
-                    x_center = max(0.0, min(1.0, x_center))
-                    y_center = max(0.0, min(1.0, y_center))
-                    width = max(0.0, min(1.0, width))
-                    height = max(0.0, min(1.0, height))
-                    f.write(f"0 {x_center:.6f} {y_center:.6f} {width:.6f} {height:.6f}\n")
-
-    data_yaml = hybrid_yolo_dir / "data.yaml"
-    config = {
-        "path": str(hybrid_yolo_dir.resolve()),
-        "train": "images/train",
-        "val": "images/val",
-        "nc": 1,
-        "names": ["pedestrian"],
-    }
-    with open(data_yaml, "w") as f:
-        yaml.dump(config, f, default_flow_style=False)
-
-    return data_yaml
 
 
 def _generate_crops(split_videos: set[str], split: str, output_dir: Path) -> list[tuple[Path, int]]:
@@ -204,7 +128,7 @@ def train_hybrid(
         yolo_best = Path(yolo_model)
     else:
         console.print("[yellow]Stage 1: Training YOLO26 pedestrian detector...[/yellow]")
-        data_yaml = _prepare_hybrid_yolo_data()
+        data_yaml = _prepare_detector_data()
         BASE_MODELS_DIR.mkdir(parents=True, exist_ok=True)
         yolo = YOLO(str(BASE_MODELS_DIR / "yolo26n.pt"))
         yolo.train(

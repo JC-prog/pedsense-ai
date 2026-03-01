@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Standalone demo app using `onnxruntime` (no PyTorch dependency required)
 - Lighter deployment footprint for inference-only environments
 
+## [1.2.1] - 2026-03-01
+
+### Added
+
+- `--yolo-variant` option for `pedsense train -m yolo` — select YOLO26 base model size (`yolo26n`, `yolo26s`, `yolo26m`, `yolo26l`, `yolo26x`); default remains `yolo26n`
+
 ## [1.2.0] - 2026-03-01
 
 ### Added

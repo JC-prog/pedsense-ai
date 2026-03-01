@@ -1,10 +1,99 @@
+import random
+import shutil
 from datetime import datetime
 from pathlib import Path
 
 import torch
+import yaml
+from rich.progress import track
 from ultralytics import YOLO
 
-from pedsense.config import BASE_MODELS_DIR, CUSTOM_MODELS_DIR, YOLO_DIR
+from pedsense.config import (
+    BASE_MODELS_DIR,
+    CUSTOM_MODELS_DIR,
+    FRAMES_DIR,
+    PROCESSED_DIR,
+    RANDOM_SEED,
+    TRAIN_SPLIT,
+    YOLO_DIR,
+)
+from pedsense.processing.annotations import PEDESTRIAN_LABELS, load_all_annotations
+
+
+def _prepare_detector_data() -> Path:
+    """Build a 1-class (pedestrian) YOLO dataset for standalone detector training.
+
+    Filters to PEDESTRIAN_LABELS only (pedestrian, ped, people).
+    Returns path to data.yaml.
+    """
+    detector_dir = PROCESSED_DIR / "yolo_detector"
+    for split in ("train", "val"):
+        (detector_dir / "images" / split).mkdir(parents=True, exist_ok=True)
+        (detector_dir / "labels" / split).mkdir(parents=True, exist_ok=True)
+
+    annotations = load_all_annotations()
+    video_ids = sorted(annotations.keys())
+    random.seed(RANDOM_SEED)
+    random.shuffle(video_ids)
+    split_idx = int(len(video_ids) * TRAIN_SPLIT)
+    train_videos = set(video_ids[:split_idx])
+
+    ped_set = set(PEDESTRIAN_LABELS)
+
+    for vid_id in track(sorted(annotations.keys()), description="Preparing detector data..."):
+        ann = annotations[vid_id]
+        split = "train" if vid_id in train_videos else "val"
+        frames_dir = FRAMES_DIR / vid_id
+
+        if not frames_dir.exists():
+            continue
+
+        frame_boxes: dict[int, list[tuple[float, float, float, float]]] = {}
+        for trk in ann.tracks:
+            if trk.label not in ped_set:
+                continue
+            for box in trk.boxes:
+                frame_boxes.setdefault(box.frame, []).append(
+                    (box.xtl, box.ytl, box.xbr, box.ybr)
+                )
+
+        for frame_num, boxes in frame_boxes.items():
+            src_img = frames_dir / f"frame_{frame_num:06d}.jpg"
+            if not src_img.exists():
+                continue
+
+            img_name = f"{vid_id}_frame_{frame_num:06d}.jpg"
+            dst_img = detector_dir / "images" / split / img_name
+            label_name = f"{vid_id}_frame_{frame_num:06d}.txt"
+            dst_label = detector_dir / "labels" / split / label_name
+
+            if not dst_img.exists():
+                shutil.copy2(src_img, dst_img)
+
+            with open(dst_label, "w") as f:
+                for xtl, ytl, xbr, ybr in boxes:
+                    x_center = ((xtl + xbr) / 2) / ann.width
+                    y_center = ((ytl + ybr) / 2) / ann.height
+                    width = (xbr - xtl) / ann.width
+                    height = (ybr - ytl) / ann.height
+                    x_center = max(0.0, min(1.0, x_center))
+                    y_center = max(0.0, min(1.0, y_center))
+                    width = max(0.0, min(1.0, width))
+                    height = max(0.0, min(1.0, height))
+                    f.write(f"0 {x_center:.6f} {y_center:.6f} {width:.6f} {height:.6f}\n")
+
+    data_yaml = detector_dir / "data.yaml"
+    config = {
+        "path": str(detector_dir.resolve()),
+        "train": "images/train",
+        "val": "images/val",
+        "nc": 1,
+        "names": ["pedestrian"],
+    }
+    with open(data_yaml, "w") as f:
+        yaml.dump(config, f, default_flow_style=False)
+
+    return data_yaml
 
 
 def train_yolo(
@@ -41,6 +130,46 @@ def train_yolo(
     model = YOLO(str(BASE_MODELS_DIR / f"{model_variant}.pt"))
 
     # Train
+    model.train(
+        data=str(data_yaml),
+        epochs=epochs,
+        batch=batch_size,
+        imgsz=imgsz,
+        device=device,
+        project=str(CUSTOM_MODELS_DIR),
+        name=output_name,
+    )
+
+    return CUSTOM_MODELS_DIR / output_name
+
+
+def train_yolo_detector(
+    name: str | None = None,
+    epochs: int = 50,
+    batch_size: int = 16,
+    imgsz: int = 640,
+    model_variant: str = "yolo26n",
+    device: str | None = None,
+) -> Path:
+    """Train a 1-class YOLO26 pedestrian detector on JAAD data.
+
+    Prepares a single-class (pedestrian) dataset internally — no preprocessing step required.
+    Returns path to the saved model directory.
+    """
+    CUSTOM_MODELS_DIR.mkdir(parents=True, exist_ok=True)
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    prefix = name if name else "yolo-detector"
+    output_name = f"{prefix}_{timestamp}"
+
+    if device is None:
+        device = "0" if torch.cuda.is_available() else "cpu"
+
+    data_yaml = _prepare_detector_data()
+
+    BASE_MODELS_DIR.mkdir(parents=True, exist_ok=True)
+    model = YOLO(str(BASE_MODELS_DIR / f"{model_variant}.pt"))
+
     model.train(
         data=str(data_yaml),
         epochs=epochs,

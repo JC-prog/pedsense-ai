@@ -119,7 +119,7 @@ def train(
     model: str = typer.Option(
         ...,
         "--model", "-m",
-        help="Model to train: yolo, resnet-lstm, hybrid",
+        help="Model to train: yolo, yolo-detector, resnet-lstm, hybrid",
     ),
     name: str = typer.Option(
         None,
@@ -133,13 +133,21 @@ def train(
         "--yolo-model",
         help="Path to existing YOLO model for hybrid training (skips YOLO training stage)",
     ),
+    yolo_variant: str = typer.Option(
+        "yolo26n",
+        "--yolo-variant",
+        help="YOLO26 base model variant: yolo26n, yolo26s, yolo26m, yolo26l, yolo26x",
+    ),
 ):
     """Train a model for pedestrian crossing intent prediction."""
-    from pedsense.train import train_yolo, train_resnet_lstm, train_hybrid
+    from pedsense.train import train_yolo, train_yolo_detector, train_resnet_lstm, train_hybrid
 
     if model == "yolo":
-        console.print("[bold yellow]Training YOLO26 model...[/bold yellow]")
-        output = train_yolo(name=name, epochs=epochs, batch_size=batch_size)
+        console.print(f"[bold yellow]Training YOLO26 model ({yolo_variant})...[/bold yellow]")
+        output = train_yolo(name=name, epochs=epochs, batch_size=batch_size, model_variant=yolo_variant)
+    elif model == "yolo-detector":
+        console.print(f"[bold yellow]Training YOLO26 pedestrian detector ({yolo_variant})...[/bold yellow]")
+        output = train_yolo_detector(name=name, epochs=epochs, batch_size=batch_size, model_variant=yolo_variant)
     elif model == "resnet-lstm":
         console.print("[bold yellow]Training ResNet+LSTM model...[/bold yellow]")
         output = train_resnet_lstm(name=name, epochs=epochs, batch_size=batch_size)
@@ -147,7 +155,7 @@ def train(
         console.print("[bold yellow]Training Hybrid model (YOLO + ResNet)...[/bold yellow]")
         output = train_hybrid(name=name, yolo_model=yolo_model, epochs=epochs, batch_size=batch_size)
     else:
-        console.print(f"[bold red]Unknown model: {model}. Use 'yolo', 'resnet-lstm', or 'hybrid'.[/bold red]")
+        console.print(f"[bold red]Unknown model: {model}. Use 'yolo', 'yolo-detector', 'resnet-lstm', or 'hybrid'.[/bold red]")
         raise typer.Exit(1)
 
     console.print(f"[bold green]Model saved to: {output}[/bold green]")
