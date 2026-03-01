@@ -26,6 +26,15 @@ def setup():
 
 
 @app.command()
+def attributes():
+    """List all supported annotation attributes and their class values."""
+    from pedsense.processing.annotations import ATTRIBUTE_LABELS
+
+    for attr, labels in ATTRIBUTE_LABELS.items():
+        console.print(f"[bold cyan]{attr}[/bold cyan]: {labels}")
+
+
+@app.command()
 def preprocess(
     step: str = typer.Argument(
         "all",
@@ -41,9 +50,22 @@ def preprocess(
         "--fps",
         help="Target FPS for frame extraction (e.g. 10, 15). Default: all frames at native FPS.",
     ),
+    attribute: str = typer.Option(
+        "cross",
+        "--attribute", "-a",
+        help="Annotation attribute to classify on. Run 'pedsense attributes' to see options.",
+    ),
 ):
     """Extract frames and prepare datasets from raw JAAD data."""
     from pedsense.processing import extract_frames, convert_to_yolo, convert_to_resnet
+    from pedsense.processing.annotations import ATTRIBUTE_LABELS
+
+    if step in ("all", "yolo", "resnet") and attribute not in ATTRIBUTE_LABELS:
+        console.print(
+            f"[bold red]Unknown attribute '{attribute}'. "
+            "Run 'pedsense attributes' to see options.[/bold red]"
+        )
+        raise typer.Exit(1)
 
     if step in ("all", "frames"):
         if fps is not None:
@@ -57,12 +79,12 @@ def preprocess(
 
     if step in ("all", "yolo"):
         console.print("[bold cyan]Converting to YOLO format...[/bold cyan]")
-        data_yaml = convert_to_yolo()
+        data_yaml = convert_to_yolo(attribute=attribute)
         console.print(f"[bold green]YOLO dataset ready: {data_yaml}[/bold green]")
 
     if step in ("all", "resnet"):
         console.print("[bold cyan]Converting to ResNet+LSTM format...[/bold cyan]")
-        labels_csv = convert_to_resnet()
+        labels_csv = convert_to_resnet(attribute=attribute)
         console.print(f"[bold green]ResNet dataset ready: {labels_csv}[/bold green]")
 
 

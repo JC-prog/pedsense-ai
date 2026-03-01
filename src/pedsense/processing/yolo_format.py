@@ -12,15 +12,21 @@ from pedsense.config import (
     TRAIN_SPLIT,
     RANDOM_SEED,
 )
-from pedsense.processing.annotations import load_all_annotations
+from pedsense.processing.annotations import load_all_annotations, ATTRIBUTE_LABELS
 
 
-def convert_to_yolo(train_ratio: float = TRAIN_SPLIT) -> Path:
+def convert_to_yolo(train_ratio: float = TRAIN_SPLIT, attribute: str = "cross") -> Path:
     """Convert all annotations to YOLO format.
 
     Split at the video level to prevent data leakage.
     Returns path to data.yaml.
+
+    Args:
+        attribute: Annotation attribute to classify on. Must be a key in ATTRIBUTE_LABELS.
+                   Run 'pedsense attributes' to list options.
     """
+    labels = ATTRIBUTE_LABELS[attribute]
+
     # Create output dirs
     for split in ("train", "val"):
         (YOLO_DIR / "images" / split).mkdir(parents=True, exist_ok=True)
@@ -46,12 +52,10 @@ def convert_to_yolo(train_ratio: float = TRAIN_SPLIT) -> Path:
             if trk.label != "pedestrian":
                 continue
             for box in trk.boxes:
-                if box.cross == "crossing":
-                    cls_id = 1
-                elif box.cross == "not-crossing":
-                    cls_id = 0
-                else:
+                label_value = getattr(box, attribute)
+                if label_value not in labels:
                     continue
+                cls_id = labels.index(label_value)
                 frame_labels[vid_id][box.frame].append(
                     (cls_id, box.xtl, box.ytl, box.xbr, box.ybr)
                 )
@@ -99,8 +103,8 @@ def convert_to_yolo(train_ratio: float = TRAIN_SPLIT) -> Path:
         "path": str(YOLO_DIR.resolve()),
         "train": "images/train",
         "val": "images/val",
-        "nc": 2,
-        "names": ["not-crossing", "crossing"],
+        "nc": len(labels),
+        "names": labels,
     }
     with open(data_yaml, "w") as f:
         yaml.dump(config, f, default_flow_style=False)

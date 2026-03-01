@@ -16,7 +16,7 @@ from pedsense.config import (
     TRAIN_SPLIT,
     RANDOM_SEED,
 )
-from pedsense.processing.annotations import load_all_annotations
+from pedsense.processing.annotations import load_all_annotations, ATTRIBUTE_LABELS
 
 
 def convert_to_resnet(
@@ -24,10 +24,15 @@ def convert_to_resnet(
     stride: int = SEQUENCE_STRIDE,
     crop_size: tuple[int, int] = CROP_SIZE,
     train_ratio: float = TRAIN_SPLIT,
+    attribute: str = "cross",
 ) -> Path:
     """Create cropped pedestrian sequences for ResNet+LSTM training.
 
     Returns path to labels.csv.
+
+    Args:
+        attribute: Annotation attribute to classify on. Must be a key in ATTRIBUTE_LABELS.
+                   Run 'pedsense attributes' to list options.
     """
     # Create output dirs
     for split in ("train", "val"):
@@ -72,9 +77,9 @@ def convert_to_resnet(
                 window = boxes[start : start + sequence_length]
 
                 # Determine label by majority vote
-                cross_counts = Counter(b.cross for b in window)
+                cross_counts = Counter(getattr(b, attribute) for b in window)
                 label = cross_counts.most_common(1)[0][0]
-                if label not in ("crossing", "not-crossing"):
+                if label not in ATTRIBUTE_LABELS[attribute]:
                     continue
 
                 # Create sequence directory

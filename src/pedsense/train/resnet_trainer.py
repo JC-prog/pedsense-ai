@@ -14,20 +14,22 @@ from rich.console import Console
 from rich.progress import track
 
 from pedsense.config import CUSTOM_MODELS_DIR, RESNET_DIR, SEQUENCE_LENGTH, CROP_SIZE
+from pedsense.processing.annotations import ATTRIBUTE_LABELS
 from pedsense.train.resnet_lstm import ResNetLSTM
 
 console = Console()
-
-LABEL_MAP = {"not-crossing": 0, "crossing": 1}
 
 
 class PedestrianSequenceDataset(Dataset):
     """Dataset that loads pedestrian image sequences for ResNet+LSTM training."""
 
-    def __init__(self, split: str = "train", transform=None):
+    def __init__(self, split: str = "train", transform=None, label_map: dict[str, int] | None = None):
         self.split = split
         self.transform = transform
         self.sequences: list[tuple[Path, int]] = []
+
+        if label_map is None:
+            label_map = {v: i for i, v in enumerate(ATTRIBUTE_LABELS["cross"])}
 
         labels_csv = RESNET_DIR / "labels.csv"
         if not labels_csv.exists():
@@ -39,8 +41,8 @@ class PedestrianSequenceDataset(Dataset):
             reader = csv.DictReader(f)
             for row in reader:
                 seq_dir = RESNET_DIR / "sequences" / split / row["sequence_id"]
-                if seq_dir.exists() and row["label"] in LABEL_MAP:
-                    self.sequences.append((seq_dir, LABEL_MAP[row["label"]]))
+                if seq_dir.exists() and row["label"] in label_map:
+                    self.sequences.append((seq_dir, label_map[row["label"]]))
 
     def __len__(self) -> int:
         return len(self.sequences)
@@ -61,13 +63,13 @@ class PedestrianSequenceDataset(Dataset):
         return sequence, label
 
 
-def _compute_class_weights(dataset: PedestrianSequenceDataset) -> torch.Tensor:
+def _compute_class_weights(dataset: PedestrianSequenceDataset, num_classes: int) -> torch.Tensor:
     """Compute inverse-frequency class weights for balanced training."""
-    counts = [0, 0]
+    counts = [0] * num_classes
     for _, label in dataset.sequences:
         counts[label] += 1
     total = sum(counts)
-    weights = [total / (len(counts) * c) if c > 0 else 1.0 for c in counts]
+    weights = [total / (num_classes * c) if c > 0 else 1.0 for c in counts]
     return torch.tensor(weights, dtype=torch.float32)
 
 
@@ -77,6 +79,7 @@ def train_resnet_lstm(
     batch_size: int = 8,
     learning_rate: float = 1e-4,
     device: str | None = None,
+    attribute: str = "cross",
 ) -> Path:
     """Train ResNet+LSTM on pedestrian crossing sequences.
 
@@ -103,9 +106,14 @@ def train_resnet_lstm(
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
 
+    # Derive label map and class count from the chosen attribute
+    class_names = ATTRIBUTE_LABELS[attribute]
+    num_classes = len(class_names)
+    label_map = {v: i for i, v in enumerate(class_names)}
+
     # Datasets
-    train_dataset = PedestrianSequenceDataset(split="train", transform=transform)
-    val_dataset = PedestrianSequenceDataset(split="val", transform=transform)
+    train_dataset = PedestrianSequenceDataset(split="train", transform=transform, label_map=label_map)
+    val_dataset = PedestrianSequenceDataset(split="val", transform=transform, label_map=label_map)
 
     if len(train_dataset) == 0:
         raise RuntimeError("No training sequences found. Run 'pedsense preprocess resnet' first.")
@@ -118,10 +126,10 @@ def train_resnet_lstm(
     )
 
     # Model
-    model = ResNetLSTM(num_classes=2).to(dev)
+    model = ResNetLSTM(num_classes=num_classes).to(dev)
 
     # Loss with class weights
-    class_weights = _compute_class_weights(train_dataset).to(dev)
+    class_weights = _compute_class_weights(train_dataset, num_classes).to(dev)
     criterion = nn.CrossEntropyLoss(weight=class_weights)
 
     # Optimizer and scheduler
@@ -196,8 +204,9 @@ def train_resnet_lstm(
     # Save config
     config = {
         "model_type": "resnet-lstm",
-        "num_classes": 2,
-        "class_names": ["not-crossing", "crossing"],
+        "attribute": attribute,
+        "num_classes": num_classes,
+        "class_names": class_names,
         "hidden_size": 256,
         "num_layers": 1,
         "sequence_length": SEQUENCE_LENGTH,

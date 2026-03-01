@@ -6,6 +6,15 @@ from rich.progress import track
 
 from pedsense.config import ANNOTATIONS_DIR
 
+# Supported annotation attributes and their ordered class values.
+# Order determines the YOLO class ID (index 0 = class 0, etc.).
+ATTRIBUTE_LABELS: dict[str, list[str]] = {
+    "cross":     ["not-crossing", "crossing"],
+    "action":    ["standing", "walking"],
+    "look":      ["not-looking", "looking"],
+    "occlusion": ["none", "part", "full"],
+}
+
 
 @dataclass
 class BoundingBox:
