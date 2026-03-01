@@ -8,6 +8,23 @@ Modules for parsing JAAD annotations, extracting video frames, and converting da
 
 `src/pedsense/processing/annotations.py`
 
+### Constants
+
+#### `ATTRIBUTE_LABELS`
+
+```python
+ATTRIBUTE_LABELS: dict[str, list[str]] = {
+    "cross":     ["not-crossing", "crossing"],
+    "action":    ["standing", "walking"],
+    "look":      ["not-looking", "looking"],
+    "occlusion": ["none", "part", "full"],
+}
+```
+
+Maps each supported JAAD behavioral attribute to its ordered list of class values. The list order determines class IDs (index 0, 1, …) for both YOLO labels and ResNet+LSTM training targets.
+
+Use `pedsense attributes` from the CLI to display this at runtime.
+
 ### Dataclasses
 
 #### `BoundingBox`
@@ -77,7 +94,7 @@ Displays a Rich progress bar during parsing.
 
 ### Functions
 
-#### `extract_frames(video_id: str | None = None) -> None`
+#### `extract_frames(video_id: str | None = None, fps: float | None = None) -> None`
 
 Extract frames from MP4 videos using OpenCV.
 
@@ -86,6 +103,7 @@ Extract frames from MP4 videos using OpenCV.
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `video_id` | `str \| None` | `None` | Process a single video. If `None`, processes all. |
+| `fps` | `float \| None` | `None` | Target frames per second. If `None`, extracts every frame at native FPS. |
 
 **Output:** `data/raw/frames/{video_id}/frame_{N:06d}.jpg`
 
@@ -95,6 +113,7 @@ Extract frames from MP4 videos using OpenCV.
 - Skips videos with existing non-empty frame directories
 - Shows Rich progress bar
 - Raises `FileNotFoundError` if video file or clips directory is missing
+- When `fps` is set, saves only every `round(native_fps / fps)`-th frame while **preserving original frame indices** in filenames — ensures annotation-based lookups remain valid
 
 ---
 
@@ -104,7 +123,7 @@ Extract frames from MP4 videos using OpenCV.
 
 ### Functions
 
-#### `convert_to_yolo(train_ratio: float = 0.8) -> Path`
+#### `convert_to_yolo(train_ratio: float = 0.8, attribute: str = "cross") -> Path`
 
 Convert JAAD annotations to YOLO format.
 
@@ -113,16 +132,17 @@ Convert JAAD annotations to YOLO format.
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `train_ratio` | `float` | `0.8` | Fraction of videos for training |
+| `attribute` | `str` | `"cross"` | Annotation attribute to classify on. Must be a key in `ATTRIBUTE_LABELS`. |
 
 **Returns:** Path to `data.yaml`
 
 **Behavior:**
 
-- Splits at video level (not frame level)
-- Creates 2 classes: `not-crossing` (0), `crossing` (1)
+- Splits at video level (not frame level) to prevent data leakage
+- Class names and IDs derived from `ATTRIBUTE_LABELS[attribute]`
 - Copies images from `data/raw/frames/` to `data/processed/yolo/images/`
 - Writes normalized YOLO labels to `.txt` files
-- Generates `data.yaml` for Ultralytics
+- Generates `data.yaml` with `nc` and `names` matching the chosen attribute
 
 ---
 
@@ -132,7 +152,7 @@ Convert JAAD annotations to YOLO format.
 
 ### Functions
 
-#### `convert_to_resnet(sequence_length: int = 16, stride: int = 8, crop_size: tuple[int, int] = (224, 224), train_ratio: float = 0.8) -> Path`
+#### `convert_to_resnet(sequence_length: int = 16, stride: int = 8, crop_size: tuple[int, int] = (224, 224), train_ratio: float = 0.8, attribute: str = "cross") -> Path`
 
 Create cropped pedestrian sequences for ResNet+LSTM training.
 
@@ -144,13 +164,14 @@ Create cropped pedestrian sequences for ResNet+LSTM training.
 | `stride` | `int` | `8` | Sliding window stride |
 | `crop_size` | `tuple[int, int]` | `(224, 224)` | Output crop dimensions |
 | `train_ratio` | `float` | `0.8` | Fraction of videos for training |
+| `attribute` | `str` | `"cross"` | Annotation attribute to classify on. Must be a key in `ATTRIBUTE_LABELS`. |
 
 **Returns:** Path to `labels.csv`
 
 **Behavior:**
 
-- Sliding window with 50% overlap
-- Crops and resizes pedestrian regions to 224x224
-- Labels by majority vote of `cross` attribute
+- Sliding window with configurable stride (default 50% overlap)
+- Crops and resizes pedestrian regions to `crop_size`
+- Labels each sequence by majority vote of `attribute` value across the window
 - Skips occluded frames
 - Same video-level split as YOLO converter

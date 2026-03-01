@@ -13,6 +13,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Standalone demo app using `onnxruntime` (no PyTorch dependency required)
 - Lighter deployment footprint for inference-only environments
 
+## [1.1.0] - 2026-03-01
+
+### Added
+
+- `pedsense attributes` CLI command — lists all supported JAAD behavioral attributes and their class values
+- `--attribute / -a` option for `pedsense preprocess` — choose which annotation attribute to classify on (`cross`, `action`, `look`, `occlusion`); default remains `cross`
+- `--fps` option for `pedsense preprocess frames` — downsample frame extraction to a target FPS while preserving original frame indices for annotation compatibility
+- `ATTRIBUTE_LABELS` constant in `pedsense.processing.annotations` — single source of truth for attribute names and class orderings across all preprocessors and the trainer
+- ResNet+LSTM trainer now accepts an `attribute` parameter; `num_classes`, label map, and saved `config.json` are all derived dynamically
+
 ## [1.0.2] - 2026-02-15
 
 ### Added

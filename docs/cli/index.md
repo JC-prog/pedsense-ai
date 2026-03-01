@@ -13,6 +13,7 @@ uv run pedsense [COMMAND] [OPTIONS]
 | Command | Description |
 |---------|-------------|
 | [`setup`](setup.md) | Create project directory structure |
+| [`attributes`](attributes.md) | List available annotation attributes and class values |
 | [`preprocess`](preprocess.md) | Extract frames and prepare datasets |
 | [`train`](train.md) | Train YOLO26, ResNet+LSTM, or Hybrid models |
 | [`demo`](demo.md) | Launch Gradio web interface |

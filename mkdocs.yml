@@ -34,6 +34,7 @@ nav:
   - CLI Reference:
     - Overview: cli/index.md
     - setup: cli/setup.md
+    - attributes: cli/attributes.md
     - preprocess: cli/preprocess.md
     - train: cli/train.md
     - demo: cli/demo.md

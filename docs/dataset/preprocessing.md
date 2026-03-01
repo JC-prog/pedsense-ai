@@ -12,7 +12,7 @@ uv run pedsense preprocess frames
 
 1. Iterates over all `.mp4` files in `data/raw/clips/`
 2. Opens each video with OpenCV's `VideoCapture`
-3. Extracts every frame as a JPEG (quality 95)
+3. Extracts frames as JPEG (quality 95), optionally subsampling by FPS
 4. Saves to `data/raw/frames/{video_id}/frame_{N:06d}.jpg`
 
 ### Output
@@ -37,6 +37,19 @@ data/raw/frames/
 !!! tip
     Use `--video video_0001` to extract a single video for testing before processing the full dataset.
 
+### FPS Downsampling
+
+Use `--fps` to reduce the number of saved frames:
+
+```bash
+uv run pedsense preprocess frames --fps 10
+```
+
+Original frame indices are preserved in filenames even when frames are skipped, so annotation-based lookups remain valid. For example, at native 30 FPS sampled to 10 FPS, only frames 0, 3, 6, … are saved, but the file for frame 90 is still `frame_000090.jpg`.
+
+!!! warning
+    Downsampled runs will skip ResNet+LSTM sequences that reference frames not on the saved interval. Choose an FPS that aligns reasonably with the annotation density.
+
 ### Idempotency
 
 Frame extraction is idempotent. If a video's frame directory already exists and is non-empty, it is skipped. To re-extract, delete the existing frame directory first.
@@ -44,6 +57,28 @@ Frame extraction is idempotent. If a video's frame directory already exists and 
 ## Annotation Parsing
 
 Annotations are parsed automatically during `preprocess yolo` and `preprocess resnet`. The parser (`pedsense.processing.annotations`) converts CVAT XML into Python dataclasses.
+
+## Attribute Selection
+
+By default, both `preprocess yolo` and `preprocess resnet` classify pedestrians by their `cross` attribute (`not-crossing` vs `crossing`). You can train on any of the four supported JAAD behavioral attributes:
+
+```bash
+# See what's available
+uv run pedsense attributes
+
+# Preprocess for gaze classification
+uv run pedsense preprocess yolo --attribute look
+uv run pedsense preprocess resnet --attribute look
+```
+
+| Attribute | Classes |
+|-----------|---------|
+| `cross` | `not-crossing`, `crossing` |
+| `action` | `standing`, `walking` |
+| `look` | `not-looking`, `looking` |
+| `occlusion` | `none`, `part`, `full` |
+
+The class ordering determines YOLO class IDs — index 0 is the first class listed above for each attribute.
 
 ### Dataclasses
 
