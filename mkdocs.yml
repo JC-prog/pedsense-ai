@@ -37,6 +37,7 @@ nav:
     - attributes: cli/attributes.md
     - preprocess: cli/preprocess.md
     - train: cli/train.md
+    - resume: cli/resume.md
     - demo: cli/demo.md
   - Models:
     - Overview: models/index.md

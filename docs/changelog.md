@@ -13,6 +13,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Standalone demo app using `onnxruntime` (no PyTorch dependency required)
 - Lighter deployment footprint for inference-only environments
 
+## [1.3.1] - 2026-03-03
+
+### Added
+
+- `--imgsz INT` option for `pedsense train` — input image size for YOLO training (`320`, `640`, `1280`); applies to `yolo`, `yolo-detector`
+- `--patience INT` option for `pedsense train` — YOLO early stopping patience (default: `100`); applies to `yolo`, `yolo-detector`
+- `--lr FLOAT` option for `pedsense train` — learning rate (default: `1e-4`); applies to `resnet-lstm`, `hybrid`
+- `--yolo-epochs INT` option for `pedsense train` — YOLO stage 1 epochs for hybrid pipeline (default: `50`)
+- `--device TEXT` option for `pedsense train` — explicit device selection (`'0'`, `'cpu'`, `'0,1'`); applies to all models
+- `patience` parameter added to `train_yolo()` and `train_yolo_detector()` API functions
+
+## [1.3.0] - 2026-03-03
+
+### Added
+
+- `pedsense resume` CLI command — interactively list YOLO models and continue training for additional epochs from `weights/last.pt`
+- `train -m yolo-detector` — standalone 1-class pedestrian detector training; builds its own dataset internally, no `preprocess yolo` required
+- `train_yolo_detector()` function in `pedsense.train.yolo_trainer`
+- `train_yolo_resume()` function in `pedsense.train.yolo_trainer`
+- `_prepare_detector_data()` shared helper (moved from `hybrid_trainer`); now filters to `PEDESTRIAN_LABELS` only, fixing a bug where non-pedestrian tracks were included in the hybrid detector dataset
+
+### Fixed
+
+- Hybrid pipeline Stage 1 detector dataset incorrectly included all track types (traffic lights, crosswalks) as class 0; now correctly filters to pedestrian-variant tracks only
+
 ## [1.2.1] - 2026-03-01
 
 ### Added

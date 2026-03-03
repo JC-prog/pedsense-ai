@@ -10,14 +10,19 @@ uv run pedsense train --model MODEL [OPTIONS]
 
 ## Options
 
-| Option | Short | Default | Description |
-|--------|-------|---------|-------------|
-| `--model TEXT` | `-m` | *(required)* | Model type: `yolo`, `resnet-lstm`, or `hybrid` |
-| `--name TEXT` | `-n` | Model type | Custom name prefix for output folder |
-| `--epochs INT` | `-e` | `50` | Number of training epochs |
-| `--batch-size INT` | `-b` | `16` | Batch size |
-| `--yolo-variant TEXT` | | `yolo26n` | YOLO26 base model variant: `yolo26n`, `yolo26s`, `yolo26m`, `yolo26l`, `yolo26x` |
-| `--yolo-model TEXT` | | `None` | Path to existing YOLO model (hybrid only) |
+| Option | Short | Default | Applies to | Description |
+|--------|-------|---------|------------|-------------|
+| `--model TEXT` | `-m` | *(required)* | all | Model type: `yolo`, `yolo-detector`, `resnet-lstm`, or `hybrid` |
+| `--name TEXT` | `-n` | Model type | all | Custom name prefix for output folder |
+| `--epochs INT` | `-e` | `50` | all | Number of training epochs |
+| `--batch-size INT` | `-b` | `16` | all | Batch size |
+| `--yolo-variant TEXT` | | `yolo26n` | yolo, yolo-detector | YOLO26 base model: `yolo26n`, `yolo26s`, `yolo26m`, `yolo26l`, `yolo26x` |
+| `--yolo-model TEXT` | | `None` | hybrid | Path to existing YOLO detector (skips stage 1) |
+| `--imgsz INT` | | `640` | yolo, yolo-detector | Input image size. Common: `320` (fast), `640` (default), `1280` (best accuracy) |
+| `--patience INT` | | `100` | yolo, yolo-detector | Early stopping: stop if no improvement for N epochs. `0` to disable |
+| `--lr FLOAT` | | `1e-4` | resnet-lstm, hybrid | Learning rate |
+| `--yolo-epochs INT` | | `50` | hybrid | Epochs for YOLO stage 1 detector |
+| `--device TEXT` | | auto | all | Training device: `'0'` (first GPU), `'cpu'`, `'0,1'` (multi-GPU) |
 
 ## Output
 
@@ -35,11 +40,11 @@ End-to-end detection and classification. Class names are determined by the `--at
 # Default: nano base model
 uv run pedsense train -m yolo -n experiment1 -e 100 -b 16
 
-# Medium variant (better accuracy, ~3× more parameters)
-uv run pedsense train -m yolo -n experiment1 -e 100 -b 8 --yolo-variant yolo26m
+# Medium variant, larger images, tighter early stopping
+uv run pedsense train -m yolo -n experiment1 -e 100 -b 8 --yolo-variant yolo26m --imgsz 1280 --patience 20
 
-# Large variant
-uv run pedsense train -m yolo -n experiment1 -e 100 -b 4 --yolo-variant yolo26l
+# Large variant, specific GPU
+uv run pedsense train -m yolo -n experiment1 -e 100 -b 4 --yolo-variant yolo26l --device 0
 ```
 
 Pretrained weights are downloaded to `models/base/` on first run.
@@ -54,13 +59,35 @@ Pretrained weights are downloaded to `models/base/` on first run.
 | `yolo26l` | Large | 4 | High accuracy, slow |
 | `yolo26x` | Extra large | 2–4 | Best accuracy, slowest |
 
+### YOLO26 Detector
+
+Pure 1-class pedestrian detector — no crossing intent classification. Useful as a standalone detector or as input to the hybrid pipeline via `--yolo-model`.
+
+Prepares its own dataset internally — **no `preprocess yolo` step required**, only `preprocess frames`.
+
+```bash
+# Nano (default)
+uv run pedsense train -m yolo-detector -n my_detector -e 50 -b 16
+
+# Medium variant
+uv run pedsense train -m yolo-detector -n my_detector -e 50 -b 8 --yolo-variant yolo26m
+```
+
+Output `data.yaml`: `nc=1, names=[pedestrian]`
+
+To continue training later, use [`pedsense resume`](resume.md).
+
+---
+
 ### ResNet+LSTM
 
 Temporal sequence classifier using ResNet-50 features + LSTM.
 
 ```bash
 uv run pedsense train -m resnet-lstm -n experiment1 -e 30 -b 8
-# Output: models/custom/experiment1_20260214_153000/
+
+# Custom learning rate
+uv run pedsense train -m resnet-lstm -n experiment1 -e 50 --lr 5e-4
 ```
 
 Saves `best.pt` (best validation accuracy), `last.pt`, and `config.json`.
@@ -72,6 +99,9 @@ Two-stage pipeline: YOLO26 pedestrian detector + ResNet-50 intent classifier.
 ```bash
 # Train both stages
 uv run pedsense train -m hybrid -n experiment1 -e 30 -b 16
+
+# Custom stage 1 epochs and learning rate
+uv run pedsense train -m hybrid -n experiment1 --yolo-epochs 30 --lr 2e-4
 
 # Reuse an existing YOLO detector (skip stage 1)
 uv run pedsense train -m hybrid -n experiment1 --yolo-model models/custom/my_yolo/weights/best.pt

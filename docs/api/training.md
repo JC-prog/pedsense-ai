@@ -10,7 +10,7 @@ Model definitions and training functions for all three architectures.
 
 ### Functions
 
-#### `train_yolo(name, epochs, batch_size, imgsz, model_variant, device) -> Path`
+#### `train_yolo(name, epochs, batch_size, imgsz, model_variant, patience, device) -> Path`
 
 Fine-tune YOLO26 on the JAAD crossing intent dataset.
 
@@ -23,6 +23,7 @@ Fine-tune YOLO26 on the JAAD crossing intent dataset.
 | `batch_size` | `int` | `16` | Batch size |
 | `imgsz` | `int` | `640` | Training image size |
 | `model_variant` | `str` | `"yolo26n"` | YOLO variant |
+| `patience` | `int` | `100` | Early stopping patience (epochs with no improvement) |
 | `device` | `str \| None` | `None` | Device (auto-detects GPU) |
 
 **Returns:** Path to saved model directory
@@ -30,6 +31,48 @@ Fine-tune YOLO26 on the JAAD crossing intent dataset.
 **Requires:** `data/processed/yolo/data.yaml` (run `preprocess yolo` first)
 
 **Base model:** Downloaded to `models/base/{model_variant}.pt` on first run.
+
+---
+
+#### `train_yolo_detector(name, epochs, batch_size, imgsz, model_variant, patience, device) -> Path`
+
+Train a 1-class YOLO26 pedestrian detector on JAAD data.
+
+Prepares its own dataset internally from raw frames and annotations — no `preprocess yolo` step required. Only requires `preprocess frames`.
+
+**Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `name` | `str \| None` | `None` | Custom output name prefix (default: `"yolo-detector"`) |
+| `epochs` | `int` | `50` | Training epochs |
+| `batch_size` | `int` | `16` | Batch size |
+| `imgsz` | `int` | `640` | Training image size |
+| `model_variant` | `str` | `"yolo26n"` | YOLO variant |
+| `patience` | `int` | `100` | Early stopping patience (epochs with no improvement) |
+| `device` | `str \| None` | `None` | Device (auto-detects GPU) |
+
+**Returns:** Path to saved model directory
+
+**Dataset:** Built to `data/processed/yolo_detector/` with `nc=1, names=[pedestrian]`. Filters to `PEDESTRIAN_LABELS` only.
+
+---
+
+#### `train_yolo_resume(model_dir, additional_epochs, device) -> Path`
+
+Continue training a YOLO model for additional epochs from `weights/last.pt`.
+
+Reads the data path and hyperparameters from the model's `args.yaml` automatically.
+
+**Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `model_dir` | `Path` | *(required)* | Path to existing model directory (must contain `weights/last.pt` and `args.yaml`) |
+| `additional_epochs` | `int` | *(required)* | Number of additional epochs to train |
+| `device` | `str \| None` | `None` | Device (auto-detects GPU) |
+
+**Returns:** Path to new model directory (`{original_name}_resumed_{timestamp}`)
 
 ---
 
