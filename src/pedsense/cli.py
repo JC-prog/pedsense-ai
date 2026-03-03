@@ -138,27 +138,135 @@ def train(
         "--yolo-variant",
         help="YOLO26 base model variant: yolo26n, yolo26s, yolo26m, yolo26l, yolo26x",
     ),
+    imgsz: int = typer.Option(
+        640,
+        "--imgsz",
+        help="Input image size for YOLO training. Common: 320 (fast), 640 (default), 1280 (best accuracy). Applies to: yolo, yolo-detector.",
+    ),
+    patience: int = typer.Option(
+        100,
+        "--patience",
+        help="Early stopping: stop training if no improvement for N epochs. Set 0 to disable. Applies to: yolo, yolo-detector.",
+    ),
+    lr: float = typer.Option(
+        None,
+        "--lr",
+        help="Learning rate (default: 1e-4). Applies to: resnet-lstm, hybrid.",
+    ),
+    yolo_epochs: int = typer.Option(
+        50,
+        "--yolo-epochs",
+        help="YOLO detector training epochs for hybrid stage 1 (default: 50). Applies to: hybrid.",
+    ),
+    device: str = typer.Option(
+        None,
+        "--device",
+        help="Training device: '0' for first GPU, 'cpu', '0,1' for multi-GPU. Default: auto-detect.",
+    ),
 ):
     """Train a model for pedestrian crossing intent prediction."""
     from pedsense.train import train_yolo, train_yolo_detector, train_resnet_lstm, train_hybrid
 
     if model == "yolo":
         console.print(f"[bold yellow]Training YOLO26 model ({yolo_variant})...[/bold yellow]")
-        output = train_yolo(name=name, epochs=epochs, batch_size=batch_size, model_variant=yolo_variant)
+        output = train_yolo(name=name, epochs=epochs, batch_size=batch_size, model_variant=yolo_variant, imgsz=imgsz, patience=patience, device=device)
     elif model == "yolo-detector":
         console.print(f"[bold yellow]Training YOLO26 pedestrian detector ({yolo_variant})...[/bold yellow]")
-        output = train_yolo_detector(name=name, epochs=epochs, batch_size=batch_size, model_variant=yolo_variant)
+        output = train_yolo_detector(name=name, epochs=epochs, batch_size=batch_size, model_variant=yolo_variant, imgsz=imgsz, patience=patience, device=device)
     elif model == "resnet-lstm":
         console.print("[bold yellow]Training ResNet+LSTM model...[/bold yellow]")
-        output = train_resnet_lstm(name=name, epochs=epochs, batch_size=batch_size)
+        output = train_resnet_lstm(name=name, epochs=epochs, batch_size=batch_size, learning_rate=lr or 1e-4, device=device)
     elif model == "hybrid":
         console.print("[bold yellow]Training Hybrid model (YOLO + ResNet)...[/bold yellow]")
-        output = train_hybrid(name=name, yolo_model=yolo_model, epochs=epochs, batch_size=batch_size)
+        output = train_hybrid(name=name, yolo_model=yolo_model, epochs=epochs, batch_size=batch_size, learning_rate=lr or 1e-4, yolo_epochs=yolo_epochs, device=device)
     else:
         console.print(f"[bold red]Unknown model: {model}. Use 'yolo', 'yolo-detector', 'resnet-lstm', or 'hybrid'.[/bold red]")
         raise typer.Exit(1)
 
     console.print(f"[bold green]Model saved to: {output}[/bold green]")
+
+
+@app.command()
+def resume():
+    """List trained YOLO models and continue training for additional epochs."""
+    import csv
+    import yaml
+    from pathlib import Path
+    from rich.table import Table
+    from pedsense.config import CUSTOM_MODELS_DIR
+    from pedsense.train.yolo_trainer import train_yolo_resume
+
+    models = []
+    for d in sorted(CUSTOM_MODELS_DIR.iterdir()):
+        if not d.is_dir():
+            continue
+        if not (d / "weights" / "last.pt").exists():
+            continue
+        args_file = d / "args.yaml"
+        if not args_file.exists():
+            continue
+
+        with open(args_file) as f:
+            args = yaml.safe_load(f)
+
+        epochs_trained, best_map50 = 0, "-"
+        results_csv = d / "results.csv"
+        if results_csv.exists():
+            with open(results_csv) as f:
+                rows = list(csv.DictReader(f))
+            if rows:
+                epochs_trained = len(rows)
+                val = rows[-1].get("metrics/mAP50(B)", "").strip()
+                best_map50 = f"{float(val):.3f}" if val else "-"
+
+        data_path = args.get("data", "")
+        model_type = "yolo-detector" if "yolo_detector" in data_path else "yolo"
+        variant = Path(args.get("model", "unknown")).stem
+
+        models.append({
+            "dir": d,
+            "name": d.name,
+            "type": model_type,
+            "variant": variant,
+            "epochs": epochs_trained,
+            "map50": best_map50,
+        })
+
+    if not models:
+        console.print("[bold red]No resumable YOLO models found in models/custom/.[/bold red]")
+        raise typer.Exit(1)
+
+    table = Table(title="Resumable YOLO Models")
+    table.add_column("#", style="bold cyan", justify="right")
+    table.add_column("Name")
+    table.add_column("Type")
+    table.add_column("Variant")
+    table.add_column("Epochs", justify="right")
+    table.add_column("mAP50", justify="right")
+
+    for i, m in enumerate(models, 1):
+        table.add_row(str(i), m["name"], m["type"], m["variant"], str(m["epochs"]), m["map50"])
+
+    console.print(table)
+
+    idx = typer.prompt("\nSelect model number", type=int)
+    if idx < 1 or idx > len(models):
+        console.print("[bold red]Invalid selection.[/bold red]")
+        raise typer.Exit(1)
+
+    selected = models[idx - 1]
+    console.print(f"Selected: [bold cyan]{selected['name']}[/bold cyan] ({selected['epochs']} epochs trained so far)")
+
+    additional = typer.prompt("Additional epochs to train", type=int)
+    if additional < 1:
+        console.print("[bold red]Must be at least 1 epoch.[/bold red]")
+        raise typer.Exit(1)
+
+    total = selected["epochs"] + additional
+    console.print(f"[yellow]Training {additional} more epochs → total {total} epochs[/yellow]")
+
+    output = train_yolo_resume(model_dir=selected["dir"], additional_epochs=additional)
+    console.print(f"[bold green]Resumed model saved to: {output}[/bold green]")
 
 
 @app.command()

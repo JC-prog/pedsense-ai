@@ -102,6 +102,7 @@ def train_yolo(
     batch_size: int = 16,
     imgsz: int = 640,
     model_variant: str = "yolo26n",
+    patience: int = 100,
     device: str | None = None,
 ) -> Path:
     """Fine-tune YOLO26 on the JAAD crossing intent dataset.
@@ -135,6 +136,7 @@ def train_yolo(
         epochs=epochs,
         batch=batch_size,
         imgsz=imgsz,
+        patience=patience,
         device=device,
         project=str(CUSTOM_MODELS_DIR),
         name=output_name,
@@ -149,6 +151,7 @@ def train_yolo_detector(
     batch_size: int = 16,
     imgsz: int = 640,
     model_variant: str = "yolo26n",
+    patience: int = 100,
     device: str | None = None,
 ) -> Path:
     """Train a 1-class YOLO26 pedestrian detector on JAAD data.
@@ -173,6 +176,47 @@ def train_yolo_detector(
     model.train(
         data=str(data_yaml),
         epochs=epochs,
+        batch=batch_size,
+        imgsz=imgsz,
+        patience=patience,
+        device=device,
+        project=str(CUSTOM_MODELS_DIR),
+        name=output_name,
+    )
+
+    return CUSTOM_MODELS_DIR / output_name
+
+
+def train_yolo_resume(
+    model_dir: Path,
+    additional_epochs: int,
+    device: str | None = None,
+) -> Path:
+    """Continue training a YOLO model for additional epochs from last.pt.
+
+    Reads data path and hyperparameters from the model's args.yaml.
+    Returns path to the new model directory.
+    """
+    last_pt = model_dir / "weights" / "last.pt"
+    args_file = model_dir / "args.yaml"
+
+    with open(args_file) as f:
+        args = yaml.safe_load(f)
+
+    data_path = args["data"]
+    batch_size = args.get("batch", 16)
+    imgsz = args.get("imgsz", 640)
+
+    if device is None:
+        device = "0" if torch.cuda.is_available() else "cpu"
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_name = f"{model_dir.name}_resumed_{timestamp}"
+
+    model = YOLO(str(last_pt))
+    model.train(
+        data=data_path,
+        epochs=additional_epochs,
         batch=batch_size,
         imgsz=imgsz,
         device=device,
