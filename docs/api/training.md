@@ -10,7 +10,7 @@ Model definitions and training functions for all three architectures.
 
 ### Functions
 
-#### `train_yolo(name, epochs, batch_size, imgsz, model_variant, patience, device) -> Path`
+#### `train_yolo(name, epochs, batch_size, imgsz, model_variant, patience, device, degrees, scale, mosaic, mixup, fliplr) -> Path`
 
 Fine-tune YOLO26 on the JAAD crossing intent dataset.
 
@@ -25,6 +25,11 @@ Fine-tune YOLO26 on the JAAD crossing intent dataset.
 | `model_variant` | `str` | `"yolo26n"` | YOLO variant |
 | `patience` | `int` | `100` | Early stopping patience (epochs with no improvement) |
 | `device` | `str \| None` | `None` | Device (auto-detects GPU) |
+| `degrees` | `float` | `0.0` | Rotation augmentation range in degrees |
+| `scale` | `float` | `0.5` | Scale jitter fraction |
+| `mosaic` | `float` | `1.0` | Mosaic augmentation probability |
+| `mixup` | `float` | `0.0` | Mixup augmentation probability |
+| `fliplr` | `float` | `0.5` | Horizontal flip probability |
 
 **Returns:** Path to saved model directory
 
@@ -34,7 +39,7 @@ Fine-tune YOLO26 on the JAAD crossing intent dataset.
 
 ---
 
-#### `train_yolo_detector(name, epochs, batch_size, imgsz, model_variant, patience, device) -> Path`
+#### `train_yolo_detector(name, epochs, batch_size, imgsz, model_variant, patience, device, degrees, scale, mosaic, mixup, fliplr) -> Path`
 
 Train a 1-class YOLO26 pedestrian detector on JAAD data.
 
@@ -51,10 +56,39 @@ Prepares its own dataset internally from raw frames and annotations — no `prep
 | `model_variant` | `str` | `"yolo26n"` | YOLO variant |
 | `patience` | `int` | `100` | Early stopping patience (epochs with no improvement) |
 | `device` | `str \| None` | `None` | Device (auto-detects GPU) |
+| `degrees` | `float` | `0.0` | Rotation augmentation range in degrees |
+| `scale` | `float` | `0.5` | Scale jitter fraction |
+| `mosaic` | `float` | `1.0` | Mosaic augmentation probability |
+| `mixup` | `float` | `0.0` | Mixup augmentation probability |
+| `fliplr` | `float` | `0.5` | Horizontal flip probability |
 
 **Returns:** Path to saved model directory
 
 **Dataset:** Built to `data/processed/yolo_detector/` with `nc=1, names=[pedestrian]`. Filters to `PEDESTRIAN_LABELS` only.
+
+---
+
+#### `train_yolo_pose(name, epochs, batch_size, imgsz, model_variant, patience, device) -> Path`
+
+Fine-tune a YOLO-Pose model on the JAAD pose dataset.
+
+**Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `name` | `str \| None` | `None` | Custom output name prefix (default: `"yolo-pose"`) |
+| `epochs` | `int` | `100` | Training epochs |
+| `batch_size` | `int` | `8` | Batch size |
+| `imgsz` | `int` | `640` | Training image size |
+| `model_variant` | `str` | `"yolo11n-pose"` | YOLO-Pose variant: `yolo11n-pose`, `yolo11s-pose`, `yolo11m-pose` |
+| `patience` | `int` | `100` | Early stopping patience (epochs with no improvement) |
+| `device` | `str \| None` | `None` | Device (auto-detects GPU) |
+
+**Returns:** Path to saved model directory
+
+**Requires:** `data/processed/pose/data.yaml` (run `preprocess pose` first)
+
+**Base model:** Downloaded to `models/base/{model_variant}.pt` on first run.
 
 ---
 

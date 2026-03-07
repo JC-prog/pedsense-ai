@@ -12,16 +12,18 @@ uv run pedsense preprocess [STEP] [OPTIONS]
 
 | Argument | Default | Description |
 |----------|---------|-------------|
-| `STEP` | `all` | Processing step: `frames`, `yolo`, `resnet`, or `all` |
+| `STEP` | `all` | Processing step: `frames`, `yolo`, `resnet`, `pose`, or `all` |
 
 ## Options
 
-| Option | Short | Default | Description |
-|--------|-------|---------|-------------|
-| `--video TEXT` | `-v` | — | Process a single video (e.g., `video_0001`). Default: all videos |
-| `--fps FLOAT` | — | — | Target FPS for frame extraction (e.g. `10`, `15`). Default: native FPS |
-| `--attribute TEXT` | `-a` | `cross` | Behavioral attribute for pedestrian classification. Run `pedsense attributes` to see options |
-| `--track-labels TEXT` | `-t` | — | Track label types to include. Repeat for multiple. Default: `pedestrian` only. Run `pedsense attributes` to see options |
+| Option | Short | Default | Applies to | Description |
+|--------|-------|---------|------------|-------------|
+| `--video TEXT` | `-v` | — | all | Process a single video (e.g., `video_0001`). Default: all videos |
+| `--fps FLOAT` | — | — | frames | Target FPS for frame extraction (e.g. `10`, `15`). Default: native FPS |
+| `--attribute TEXT` | `-a` | `cross` | yolo, resnet | Behavioral attribute for pedestrian classification. Run `pedsense attributes` to see options |
+| `--track-labels TEXT` | `-t` | — | yolo, resnet | Track label types to include. Repeat for multiple. Default: `pedestrian` only. Run `pedsense attributes` to see options |
+| `--pose-variant TEXT` | — | `yolo11n-pose` | pose | YOLO-Pose model: `yolo11n-pose`, `yolo11s-pose`, `yolo11m-pose` |
+| `--conf FLOAT` | — | `0.25` | pose | Detection confidence threshold for pose extraction |
 
 ## Steps
 
@@ -107,9 +109,55 @@ Output: `data/processed/resnet/` with `labels.csv` and `sequences/` directory.
 !!! note
     Non-pedestrian track types (`traffic_light`, `crosswalk`) are always ignored for ResNet+LSTM — they have no behavioral attributes to classify on.
 
+### `pose` — Extract Pose Keypoints
+
+Runs a pretrained YOLO-Pose model on extracted frames to detect pedestrians and extract **17 COCO body keypoints** per detection. Saves YOLO pose-format labels for downstream training or analysis.
+
+**Does not use JAAD annotations** — keypoints are inferred by the pose model directly from pixel data.
+
+```bash
+# Default (yolo11n-pose, conf=0.25)
+uv run pedsense preprocess pose
+
+# Larger model, higher confidence
+uv run pedsense preprocess pose --pose-variant yolo11m-pose --conf 0.4
+
+# Single video test
+uv run pedsense preprocess pose --video video_0001
+```
+
+Output: `data/processed/pose/` with `data.yaml`, `images/`, and `labels/` directories.
+
+**Label format** (per detection per line):
+```
+0 cx cy w h  kp1x kp1y 2  kp2x kp2y 2  ...  kp17x kp17y 2
+```
+All coordinates normalized 0–1. The trailing `2` is the YOLO visibility flag (visible).
+
+**`data.yaml`:**
+```yaml
+nc: 1
+names: [pedestrian]
+kpt_shape: [17, 3]
+```
+
+!!! note
+    YOLO-Pose models (`yolo11n-pose.pt`, etc.) are downloaded to `models/base/` on first run.
+
+!!! important
+    Requires frames to exist. Run `preprocess frames` before `preprocess pose`.
+
+**Pose variant comparison:**
+
+| Variant | Size | Speed | Accuracy |
+|---------|------|-------|----------|
+| `yolo11n-pose` | Nano (default) | Fastest | Good |
+| `yolo11s-pose` | Small | Fast | Better |
+| `yolo11m-pose` | Medium | Moderate | Best |
+
 ### `all` — Full Pipeline
 
-Runs all three steps sequentially.
+Runs `frames`, `yolo`, and `resnet` sequentially. Does **not** include `pose` (run it separately after).
 
 ```bash
 # Default (cross, pedestrian only)

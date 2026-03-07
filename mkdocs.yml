@@ -50,6 +50,7 @@ nav:
     - Preprocessing: dataset/preprocessing.md
     - YOLO Format: dataset/yolo-format.md
     - ResNet Format: dataset/resnet-format.md
+    - Pose Format: dataset/pose-format.md
   - API Reference:
     - Overview: api/index.md
     - Config: api/config.md

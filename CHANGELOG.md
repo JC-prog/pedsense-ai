@@ -13,6 +13,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Standalone demo app using `onnxruntime` (no PyTorch dependency required)
 - Lighter deployment footprint for inference-only environments
 
+## [1.5.0] - 2026-03-07
+
+### Added
+
+- `train -m yolo-pose` CLI command — fine-tune a YOLO-Pose model on `data/processed/pose/`
+- `--yolo-variant` accepts YOLO-Pose variants for `yolo-pose`: `yolo11n-pose` (default), `yolo11s-pose`, `yolo11m-pose`; consistent with other YOLO commands defaulting to nano
+- `train_yolo_pose()` function in `pedsense.train.yolo_trainer`
+
+## [1.4.0] - 2026-03-07
+
+### Added
+
+- `preprocess pose` step — runs a pretrained YOLO-Pose model on extracted frames to generate YOLO pose-format labels (bounding box + 17 COCO keypoints per pedestrian)
+- `--pose-variant TEXT` option for `pedsense preprocess` — select YOLO-Pose model: `yolo11n-pose` (default), `yolo11s-pose`, `yolo11m-pose`; applies to `pose` step
+- `--conf FLOAT` option for `pedsense preprocess` — detection confidence threshold for pose extraction (default: `0.25`); applies to `pose` step
+- `extract_pose_labels()` function in `pedsense.processing.pose_format`
+- `POSE_DIR` path constant in `pedsense.config`
+- `data/processed/pose/data.yaml` includes `kpt_shape: [17, 3]` for direct use with Ultralytics YOLO-Pose training
+
+## [1.3.2] - 2026-03-04
+
+### Added
+
+- `--aug-degrees FLOAT` option for `pedsense train` — rotation augmentation range in degrees (default: `0.0`); applies to `yolo`, `yolo-detector`
+- `--aug-scale FLOAT` option for `pedsense train` — scale jitter fraction (default: `0.5`); applies to `yolo`, `yolo-detector`
+- `--aug-mosaic FLOAT` option for `pedsense train` — mosaic augmentation probability (default: `1.0`); applies to `yolo`, `yolo-detector`
+- `--aug-mixup FLOAT` option for `pedsense train` — mixup augmentation probability (default: `0.0`); applies to `yolo`, `yolo-detector`
+- `--aug-fliplr FLOAT` option for `pedsense train` — horizontal flip probability (default: `0.5`); applies to `yolo`, `yolo-detector`
+- `degrees`, `scale`, `mosaic`, `mixup`, `fliplr` parameters added to `train_yolo()` and `train_yolo_detector()` API functions
+
 ## [1.3.1] - 2026-03-03
 
 ### Added

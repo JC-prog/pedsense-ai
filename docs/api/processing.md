@@ -174,6 +174,58 @@ names: [not-crossing, crossing, traffic_light, crosswalk]
 
 ---
 
+## pedsense.processing.pose_format
+
+`src/pedsense/processing/pose_format.py`
+
+### Functions
+
+#### `extract_pose_labels(model_variant, video_id, conf) -> Path`
+
+Run a pretrained YOLO-Pose model on extracted frames and save YOLO pose-format labels.
+
+**Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `model_variant` | `str` | `"yolo11n-pose"` | YOLO-Pose model to use. Downloaded to `models/base/` on first run. |
+| `video_id` | `str \| None` | `None` | Process a single video. If `None`, processes all frame directories. |
+| `conf` | `float` | `0.25` | Detection confidence threshold. |
+
+**Returns:** Path to `data/processed/pose/data.yaml`
+
+**Output structure:**
+```
+data/processed/pose/
+  images/train/        ← frames copied from data/raw/frames/
+  images/val/
+  labels/train/        ← YOLO pose .txt files
+  labels/val/
+  data.yaml
+```
+
+**Label format** (one detection per line):
+```
+0 cx cy w h  kp1x kp1y 2  kp2x kp2y 2  ...  kp17x kp17y 2
+```
+All coordinates normalized 0–1. 17 COCO keypoints. Visibility flag `2` = visible.
+
+**`data.yaml`:**
+```yaml
+nc: 1
+names: [pedestrian]
+kpt_shape: [17, 3]
+```
+
+**Behavior:**
+
+- Uses the same 80/20 video-level train/val split (`RANDOM_SEED=42`) as other preprocessing steps
+- Skips frames with no detections (no label file written for those frames)
+- Images are copied only once (idempotent on re-run)
+- Raises `FileNotFoundError` if frame directories are missing
+
+---
+
 ## pedsense.processing.resnet_format
 
 `src/pedsense/processing/resnet_format.py`
