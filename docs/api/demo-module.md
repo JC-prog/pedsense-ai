@@ -41,21 +41,28 @@ Run model inference on a video file.
 
 **Statistics dict:**
 
+For crossing intent models (YOLO, Hybrid):
 ```python
-{
-    "total_detections": 150,
-    "crossing": 42,
-    "not_crossing": 108
-}
+{"total_detections": 150, "crossing": 42, "not_crossing": 108}
+```
+
+For YOLO-Pose models:
+```python
+{"total_pedestrians": 150, "model_type": "yolo-pose"}
 ```
 
 ## Model Type Detection
 
-The demo auto-detects the model type from `config.json` in the model directory:
+The demo auto-detects model type by checking, in order:
+
+1. `args.yaml` — if the base model file contains `"pose"` in its name → `"yolo-pose"`
+2. `config.json` — reads `model_type` field → `"hybrid"` or `"resnet-lstm"`
+3. Weights directory presence → `"yolo"` (fallback)
 
 | `model_type` | Inference Method |
 |-------------|-----------------|
 | `"yolo"` | Direct YOLO frame-by-frame detection + classification |
+| `"yolo-pose"` | YOLO-Pose keypoint detection with skeleton visualization |
 | `"hybrid"` | YOLO detects pedestrians, ResNet classifies each crop |
 | `"resnet-lstm"` | Not supported in demo (needs external detector) |
 
@@ -81,4 +88,4 @@ Returns the first model from `_list_available_models()`, or `None` if no models 
 
 ### `_detect_model_type(model_dir: Path) -> str`
 
-Reads `config.json` to determine model type. Falls back to checking for YOLO weight files via `_find_yolo_weights()`.
+Detects model type by checking `args.yaml` (pose model detection), then `config.json`, then weight file presence. Returns one of `"yolo"`, `"yolo-pose"`, `"hybrid"`, or `"resnet-lstm"`.

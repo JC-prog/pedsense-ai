@@ -14,11 +14,12 @@ def setup():
         FRAMES_DIR,
         YOLO_DIR,
         RESNET_DIR,
+        POSE_DIR,
         BASE_MODELS_DIR,
         CUSTOM_MODELS_DIR,
     )
 
-    for folder in [RAW_DIR, PROCESSED_DIR, FRAMES_DIR, YOLO_DIR, RESNET_DIR, BASE_MODELS_DIR, CUSTOM_MODELS_DIR]:
+    for folder in [RAW_DIR, PROCESSED_DIR, FRAMES_DIR, YOLO_DIR, RESNET_DIR, POSE_DIR, BASE_MODELS_DIR, CUSTOM_MODELS_DIR]:
         folder.mkdir(parents=True, exist_ok=True)
 
     console.print("[bold green]Project structure verified![/bold green]")
@@ -45,7 +46,7 @@ def attributes():
 def preprocess(
     step: str = typer.Argument(
         "all",
-        help="Processing step: frames, yolo, resnet, or all",
+        help="Processing step: frames, yolo, resnet, pose, or all",
     ),
     video_id: str = typer.Option(
         None,
@@ -72,10 +73,24 @@ def preprocess(
             "Default: pedestrian only. Run 'pedsense attributes' to see options."
         ),
     ),
+    pose_variant: str = typer.Option(
+        "yolo11n-pose",
+        "--pose-variant",
+        help="YOLO-Pose model for keypoint extraction: yolo11n-pose, yolo11s-pose, yolo11m-pose. Applies to: pose.",
+    ),
+    conf: float = typer.Option(
+        0.25,
+        "--conf",
+        help="Detection confidence threshold for pose extraction (default: 0.25). Applies to: pose.",
+    ),
 ):
     """Extract frames and prepare datasets from raw JAAD data."""
-    from pedsense.processing import extract_frames, convert_to_yolo, convert_to_resnet
+    from pedsense.processing import extract_frames, convert_to_yolo, convert_to_resnet, extract_pose_labels
     from pedsense.processing.annotations import ATTRIBUTE_LABELS, TRACK_LABELS
+
+    if step not in ("all", "frames", "yolo", "resnet", "pose"):
+        console.print(f"[bold red]Unknown step '{step}'. Use: frames, yolo, resnet, pose, or all.[/bold red]")
+        raise typer.Exit(1)
 
     if step in ("all", "yolo", "resnet") and attribute not in ATTRIBUTE_LABELS:
         console.print(
@@ -113,13 +128,18 @@ def preprocess(
         labels_csv = convert_to_resnet(attribute=attribute, ped_labels=track_labels or None)
         console.print(f"[bold green]ResNet dataset ready: {labels_csv}[/bold green]")
 
+    if step == "pose":
+        console.print(f"[bold cyan]Extracting pose keypoints ({pose_variant})...[/bold cyan]")
+        data_yaml = extract_pose_labels(model_variant=pose_variant, video_id=video_id, conf=conf)
+        console.print(f"[bold green]Pose dataset ready: {data_yaml}[/bold green]")
+
 
 @app.command()
 def train(
     model: str = typer.Option(
         ...,
         "--model", "-m",
-        help="Model to train: yolo, yolo-detector, resnet-lstm, hybrid",
+        help="Model to train: yolo, yolo-detector, yolo-pose, resnet-lstm, hybrid",
     ),
     name: str = typer.Option(
         None,
@@ -136,7 +156,7 @@ def train(
     yolo_variant: str = typer.Option(
         "yolo26n",
         "--yolo-variant",
-        help="YOLO26 base model variant: yolo26n, yolo26s, yolo26m, yolo26l, yolo26x",
+        help="YOLO26 base model variant: yolo26n, yolo26s, yolo26m, yolo26l, yolo26x. For yolo-pose, use: yolo11n-pose, yolo11s-pose, yolo11m-pose.",
     ),
     imgsz: int = typer.Option(
         640,
@@ -163,16 +183,45 @@ def train(
         "--device",
         help="Training device: '0' for first GPU, 'cpu', '0,1' for multi-GPU. Default: auto-detect.",
     ),
+    aug_degrees: float = typer.Option(
+        0.0,
+        "--aug-degrees",
+        help="Rotation augmentation range in degrees (e.g. 10 = random ±10°). Default 0 (off). Applies to: yolo, yolo-detector.",
+    ),
+    aug_scale: float = typer.Option(
+        0.5,
+        "--aug-scale",
+        help="Scale jitter fraction (e.g. 0.5 = 50-150%% size variation). Higher helps detect pedestrians at varied distances. Applies to: yolo, yolo-detector.",
+    ),
+    aug_mosaic: float = typer.Option(
+        1.0,
+        "--aug-mosaic",
+        help="Mosaic augmentation probability 0-1. 1.0 = always on (default), 0 = disabled. Applies to: yolo, yolo-detector.",
+    ),
+    aug_mixup: float = typer.Option(
+        0.0,
+        "--aug-mixup",
+        help="Mixup augmentation probability 0-1. Default 0 (off). Try 0.1-0.2 to improve generalisation. Applies to: yolo, yolo-detector.",
+    ),
+    aug_fliplr: float = typer.Option(
+        0.5,
+        "--aug-fliplr",
+        help="Horizontal flip probability 0-1. Default 0.5. Set to 0 if pedestrian direction matters. Applies to: yolo, yolo-detector.",
+    ),
 ):
     """Train a model for pedestrian crossing intent prediction."""
-    from pedsense.train import train_yolo, train_yolo_detector, train_resnet_lstm, train_hybrid
+    from pedsense.train import train_yolo, train_yolo_detector, train_yolo_pose, train_resnet_lstm, train_hybrid
 
     if model == "yolo":
         console.print(f"[bold yellow]Training YOLO26 model ({yolo_variant})...[/bold yellow]")
-        output = train_yolo(name=name, epochs=epochs, batch_size=batch_size, model_variant=yolo_variant, imgsz=imgsz, patience=patience, device=device)
+        output = train_yolo(name=name, epochs=epochs, batch_size=batch_size, model_variant=yolo_variant, imgsz=imgsz, patience=patience, device=device, degrees=aug_degrees, scale=aug_scale, mosaic=aug_mosaic, mixup=aug_mixup, fliplr=aug_fliplr)
     elif model == "yolo-detector":
         console.print(f"[bold yellow]Training YOLO26 pedestrian detector ({yolo_variant})...[/bold yellow]")
-        output = train_yolo_detector(name=name, epochs=epochs, batch_size=batch_size, model_variant=yolo_variant, imgsz=imgsz, patience=patience, device=device)
+        output = train_yolo_detector(name=name, epochs=epochs, batch_size=batch_size, model_variant=yolo_variant, imgsz=imgsz, patience=patience, device=device, degrees=aug_degrees, scale=aug_scale, mosaic=aug_mosaic, mixup=aug_mixup, fliplr=aug_fliplr)
+    elif model == "yolo-pose":
+        pose_variant = yolo_variant if yolo_variant.endswith("-pose") else "yolo11n-pose"
+        console.print(f"[bold yellow]Training YOLO-Pose model ({pose_variant})...[/bold yellow]")
+        output = train_yolo_pose(name=name, epochs=epochs, batch_size=batch_size, model_variant=pose_variant, imgsz=imgsz, patience=patience, device=device)
     elif model == "resnet-lstm":
         console.print("[bold yellow]Training ResNet+LSTM model...[/bold yellow]")
         output = train_resnet_lstm(name=name, epochs=epochs, batch_size=batch_size, learning_rate=lr or 1e-4, device=device)
@@ -180,7 +229,7 @@ def train(
         console.print("[bold yellow]Training Hybrid model (YOLO + ResNet)...[/bold yellow]")
         output = train_hybrid(name=name, yolo_model=yolo_model, epochs=epochs, batch_size=batch_size, learning_rate=lr or 1e-4, yolo_epochs=yolo_epochs, device=device)
     else:
-        console.print(f"[bold red]Unknown model: {model}. Use 'yolo', 'yolo-detector', 'resnet-lstm', or 'hybrid'.[/bold red]")
+        console.print(f"[bold red]Unknown model: {model}. Use 'yolo', 'yolo-detector', 'yolo-pose', 'resnet-lstm', or 'hybrid'.[/bold red]")
         raise typer.Exit(1)
 
     console.print(f"[bold green]Model saved to: {output}[/bold green]")

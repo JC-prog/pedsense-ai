@@ -12,6 +12,7 @@ FRAMES_DIR = RAW_DIR / "frames"
 PROCESSED_DIR = PROJECT_ROOT / "data" / "processed"
 YOLO_DIR = PROCESSED_DIR / "yolo"
 RESNET_DIR = PROCESSED_DIR / "resnet"
+POSE_DIR = PROCESSED_DIR / "pose"
 
 # Models
 MODELS_DIR = PROJECT_ROOT / "models"

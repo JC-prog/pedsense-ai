@@ -12,6 +12,7 @@ from pedsense.config import (
     BASE_MODELS_DIR,
     CUSTOM_MODELS_DIR,
     FRAMES_DIR,
+    POSE_DIR,
     PROCESSED_DIR,
     RANDOM_SEED,
     TRAIN_SPLIT,
@@ -104,6 +105,11 @@ def train_yolo(
     model_variant: str = "yolo26n",
     patience: int = 100,
     device: str | None = None,
+    degrees: float = 0.0,
+    scale: float = 0.5,
+    mosaic: float = 1.0,
+    mixup: float = 0.0,
+    fliplr: float = 0.5,
 ) -> Path:
     """Fine-tune YOLO26 on the JAAD crossing intent dataset.
 
@@ -140,6 +146,11 @@ def train_yolo(
         device=device,
         project=str(CUSTOM_MODELS_DIR),
         name=output_name,
+        degrees=degrees,
+        scale=scale,
+        mosaic=mosaic,
+        mixup=mixup,
+        fliplr=fliplr,
     )
 
     return CUSTOM_MODELS_DIR / output_name
@@ -153,6 +164,11 @@ def train_yolo_detector(
     model_variant: str = "yolo26n",
     patience: int = 100,
     device: str | None = None,
+    degrees: float = 0.0,
+    scale: float = 0.5,
+    mosaic: float = 1.0,
+    mixup: float = 0.0,
+    fliplr: float = 0.5,
 ) -> Path:
     """Train a 1-class YOLO26 pedestrian detector on JAAD data.
 
@@ -169,6 +185,57 @@ def train_yolo_detector(
         device = "0" if torch.cuda.is_available() else "cpu"
 
     data_yaml = _prepare_detector_data()
+
+    BASE_MODELS_DIR.mkdir(parents=True, exist_ok=True)
+    model = YOLO(str(BASE_MODELS_DIR / f"{model_variant}.pt"))
+
+    model.train(
+        data=str(data_yaml),
+        epochs=epochs,
+        batch=batch_size,
+        imgsz=imgsz,
+        patience=patience,
+        device=device,
+        project=str(CUSTOM_MODELS_DIR),
+        name=output_name,
+        degrees=degrees,
+        scale=scale,
+        mosaic=mosaic,
+        mixup=mixup,
+        fliplr=fliplr,
+    )
+
+    return CUSTOM_MODELS_DIR / output_name
+
+
+def train_yolo_pose(
+    name: str | None = None,
+    epochs: int = 100,
+    batch_size: int = 8,
+    imgsz: int = 640,
+    model_variant: str = "yolo11n-pose",
+    patience: int = 100,
+    device: str | None = None,
+) -> Path:
+    """Fine-tune a YOLO-Pose model on the JAAD pose dataset.
+
+    Requires pose dataset to exist (run 'pedsense preprocess pose' first).
+    Returns path to the saved model directory.
+    """
+    data_yaml = POSE_DIR / "data.yaml"
+    if not data_yaml.exists():
+        raise FileNotFoundError(
+            f"Pose dataset not found at {data_yaml}. Run 'pedsense preprocess pose' first."
+        )
+
+    CUSTOM_MODELS_DIR.mkdir(parents=True, exist_ok=True)
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    prefix = name if name else "yolo-pose"
+    output_name = f"{prefix}_{timestamp}"
+
+    if device is None:
+        device = "0" if torch.cuda.is_available() else "cpu"
 
     BASE_MODELS_DIR.mkdir(parents=True, exist_ok=True)
     model = YOLO(str(BASE_MODELS_DIR / f"{model_variant}.pt"))

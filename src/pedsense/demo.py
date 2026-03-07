@@ -6,6 +6,7 @@ import cv2
 import gradio as gr
 import numpy as np
 import torch
+import yaml
 from torchvision import transforms
 from ultralytics import YOLO
 
@@ -14,6 +15,14 @@ from pedsense.train.resnet_lstm import ResNetLSTM, ResNetClassifier
 
 CLASS_NAMES = ["not-crossing", "crossing"]
 COLORS = {"not-crossing": (0, 255, 0), "crossing": (0, 0, 255)}  # BGR: green, red
+
+# COCO skeleton connections (index pairs into the 17 keypoints)
+_COCO_SKELETON = [
+    (0, 1), (0, 2), (1, 3), (2, 4),          # head
+    (5, 6), (5, 7), (7, 9), (6, 8), (8, 10), # arms
+    (5, 11), (6, 12), (11, 12),               # torso
+    (11, 13), (13, 15), (12, 14), (14, 16),   # legs
+]
 
 
 def _find_yolo_weights(model_dir: Path) -> Path | None:
@@ -51,7 +60,16 @@ def _get_latest_model() -> str | None:
 
 
 def _detect_model_type(model_dir: Path) -> str:
-    """Detect model type from config.json or directory contents."""
+    """Detect model type from config.json, args.yaml, or directory contents."""
+    # Check args.yaml first (written by Ultralytics after training)
+    args_file = model_dir / "args.yaml"
+    if args_file.exists():
+        with open(args_file) as f:
+            args = yaml.safe_load(f)
+        model_path = args.get("model", "")
+        if "pose" in Path(model_path).stem:
+            return "yolo-pose"
+
     config_path = model_dir / "config.json"
     if config_path.exists():
         with open(config_path) as f:
@@ -214,6 +232,75 @@ def _run_hybrid_inference(
     return out_path, stats
 
 
+def _run_yolo_pose_inference(
+    video_path: str, model_dir: Path, confidence: float
+) -> tuple[str, dict]:
+    """Run YOLO-Pose inference on a video, rendering keypoints and skeleton."""
+    weights = _find_yolo_weights(model_dir)
+    if weights is None:
+        raise FileNotFoundError(f"No YOLO weights found in {model_dir / 'weights'}")
+    model = YOLO(str(weights))
+
+    cap = cv2.VideoCapture(video_path)
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+    w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+    out_path = tempfile.mktemp(suffix=".mp4")
+    writer = cv2.VideoWriter(out_path, cv2.VideoWriter_fourcc(*"mp4v"), fps, (w, h))
+
+    stats = {"total_pedestrians": 0, "model_type": "yolo-pose"}
+
+    try:
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+
+            results = model(frame, conf=confidence, verbose=False)
+
+            for r in results:
+                if r.boxes is None:
+                    continue
+
+                kpts_data = r.keypoints.xy.cpu().numpy() if r.keypoints is not None else None
+                kpts_conf = r.keypoints.conf.cpu().numpy() if (r.keypoints is not None and r.keypoints.conf is not None) else None
+
+                for i, box in enumerate(r.boxes):
+                    x1, y1, x2, y2 = map(int, box.xyxy[0])
+                    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 255), 2)  # cyan box
+                    cv2.putText(frame, "pedestrian", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+                    stats["total_pedestrians"] += 1
+
+                    if kpts_data is None or i >= len(kpts_data):
+                        continue
+
+                    kp = kpts_data[i]  # shape (17, 2)
+                    kp_c = kpts_conf[i] if kpts_conf is not None else np.ones(17)
+
+                    # Draw skeleton connections
+                    for a, b in _COCO_SKELETON:
+                        if kp_c[a] > 0.3 and kp_c[b] > 0.3:
+                            pt_a = (int(kp[a][0]), int(kp[a][1]))
+                            pt_b = (int(kp[b][0]), int(kp[b][1]))
+                            if pt_a != (0, 0) and pt_b != (0, 0):
+                                cv2.line(frame, pt_a, pt_b, (0, 255, 0), 2)  # green skeleton
+
+                    # Draw keypoints
+                    for j in range(17):
+                        if kp_c[j] > 0.3:
+                            px, py = int(kp[j][0]), int(kp[j][1])
+                            if px > 0 or py > 0:
+                                cv2.circle(frame, (px, py), 4, (0, 215, 255), -1)  # yellow dots
+
+            writer.write(frame)
+    finally:
+        cap.release()
+        writer.release()
+
+    return out_path, stats
+
+
 def run_inference(
     video_path: str, model_name: str, confidence: float
 ) -> tuple[str | None, dict]:
@@ -229,6 +316,8 @@ def run_inference(
 
     if model_type == "yolo":
         return _run_yolo_inference(video_path, model_dir, confidence)
+    elif model_type == "yolo-pose":
+        return _run_yolo_pose_inference(video_path, model_dir, confidence)
     elif model_type == "hybrid":
         return _run_hybrid_inference(video_path, model_dir, confidence)
     elif model_type == "resnet-lstm":
