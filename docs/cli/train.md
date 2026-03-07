@@ -91,6 +91,9 @@ To continue training later, use [`pedsense resume`](resume.md).
 
 Fine-tune a YOLO-Pose model on the JAAD pose dataset to predict pedestrian keypoints.
 
+!!! note
+    Pose estimation uses the **YOLO11-Pose** family (`yolo11n-pose`, `yolo11s-pose`, `yolo11m-pose`). YOLO26 is detection-only and has no pose variant. `yolo11n-pose` is the nano equivalent of `yolo26n` — use `--yolo-variant yolo11m-pose` for the medium equivalent.
+
 **Requires:** `preprocess pose` to have been run first.
 
 ```bash
