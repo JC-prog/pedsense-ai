@@ -24,9 +24,28 @@ data/raw/frames/
         frame_000001.jpg
         ...
         frame_000599.jpg
+        meta.json           ← FPS metadata
     video_0002/
         ...
 ```
+
+`meta.json` is written after each video and records the FPS information needed by downstream steps (particularly `preprocess keypoints`):
+
+```json
+{
+  "native_fps": 29.97,
+  "interval": 1,
+  "extracted_fps": 29.97
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `native_fps` | FPS of the original video clip |
+| `interval` | Frame sampling interval used (`1` = every frame, `3` = every 3rd, etc.) |
+| `extracted_fps` | Effective FPS of frames on disk (`native_fps / interval`) |
+
+After frame extraction, source clips in `data/raw/clips/` are no longer needed by any downstream step.
 
 ### Disk Space
 

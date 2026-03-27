@@ -59,10 +59,10 @@ uv run pedsense train --model resnet-lstm --name my_resnet --epochs 30 --batch-s
 uv run pedsense train --model hybrid --name my_hybrid --epochs 30
 
 # Or reuse an existing YOLO detector
-uv run pedsense train --model hybrid --name my_hybrid --yolo-model models/custom/my_yolo_20260214_120000/weights/best.pt
+uv run pedsense train --model hybrid --name my_hybrid --yolo-model models/detector/my_yolo_20260214_120000/weights/best.pt
 ```
 
-Trained models are saved to `models/custom/{name}_{datetime}/`.
+Detection models (yolo, hybrid) are saved to `models/detector/{name}_{datetime}/`. Intent classifiers (keypoint-lstm, resnet-lstm) are saved to `models/classifier/{name}_{datetime}/`.
 
 ## 5. Run the Demo
 

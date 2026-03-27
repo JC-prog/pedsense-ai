@@ -62,7 +62,8 @@ src/pedsense/
 ### Key Configuration
 
 - Base pretrained models download to `models/base/` (not project root)
-- Trained models save to `models/custom/{name}_{YYYYMMDD_HHMMSS}/`
+- Detection models (yolo, yolo-pose, hybrid) save to `models/detector/{name}_{YYYYMMDD_HHMMSS}/`
+- Intent classifiers (keypoint-lstm, resnet-lstm) save to `models/classifier/{name}_{YYYYMMDD_HHMMSS}/`
 - JAAD raw data expected in `data/raw/clips/` and `data/raw/annotations/`
 - Processed datasets in `data/processed/yolo/` and `data/processed/resnet/`
 

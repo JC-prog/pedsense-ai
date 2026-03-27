@@ -18,7 +18,8 @@ Centralized path constants and training defaults used across all modules.
 | `RESNET_DIR` | `data/processed/resnet/` | ResNet sequence dataset |
 | `MODELS_DIR` | `models/` | Models root |
 | `BASE_MODELS_DIR` | `models/base/` | Downloaded pretrained weights |
-| `CUSTOM_MODELS_DIR` | `models/custom/` | Trained model outputs |
+| `DETECTOR_MODELS_DIR` | `models/detector/` | Detection model outputs (yolo, yolo-pose, hybrid) |
+| `CLASSIFIER_MODELS_DIR` | `models/classifier/` | Intent classifier outputs (keypoint-lstm, resnet-lstm) |
 
 ## Training Defaults
 

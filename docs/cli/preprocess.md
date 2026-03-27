@@ -12,7 +12,7 @@ uv run pedsense preprocess [STEP] [OPTIONS]
 
 | Argument | Default | Description |
 |----------|---------|-------------|
-| `STEP` | `all` | Processing step: `frames`, `yolo`, `resnet`, `pose`, or `all` |
+| `STEP` | `all` | Processing step: `frames`, `yolo`, `resnet`, `pose`, `keypoints`, or `all` |
 
 ## Options
 
@@ -22,8 +22,12 @@ uv run pedsense preprocess [STEP] [OPTIONS]
 | `--fps FLOAT` | — | — | frames | Target FPS for frame extraction (e.g. `10`, `15`). Default: native FPS |
 | `--attribute TEXT` | `-a` | `cross` | yolo, resnet | Behavioral attribute for pedestrian classification. Run `pedsense attributes` to see options |
 | `--track-labels TEXT` | `-t` | — | yolo, resnet | Track label types to include. Repeat for multiple. Default: `pedestrian` only. Run `pedsense attributes` to see options |
-| `--pose-variant TEXT` | — | `yolo11n-pose` | pose | YOLO-Pose model: `yolo11n-pose`, `yolo11s-pose`, `yolo11m-pose` |
-| `--conf FLOAT` | — | `0.25` | pose | Detection confidence threshold for pose extraction |
+| `--pose-variant TEXT` | — | `yolo11n-pose` | pose, keypoints | YOLO-Pose model: `yolo11n-pose`, `yolo11s-pose`, `yolo11m-pose` |
+| `--conf FLOAT` | — | `0.25` | pose, keypoints | Detection confidence threshold |
+| `--iou-threshold FLOAT` | — | `0.3` | keypoints | Minimum IoU to match a YOLO-Pose detection to a JAAD pedestrian track |
+| `--sequence-length INT` | — | `16` | keypoints | Frames per keypoint sequence window |
+| `--sequence-stride INT` | — | `8` | keypoints | Step between consecutive windows (in extracted frames) |
+| `--prediction-horizon FLOAT` | — | `1.0` | keypoints | Seconds before `crossing_point` that windows must end by |
 
 ## Steps
 
@@ -42,10 +46,22 @@ uv run pedsense preprocess frames -v video_0001
 uv run pedsense preprocess frames --fps 10
 ```
 
-Output: `data/raw/frames/{video_id}/frame_{N:06d}.jpg`
+**Output:**
+
+- `data/raw/frames/{video_id}/frame_{N:06d}.jpg` — extracted frames
+- `data/raw/frames/{video_id}/meta.json` — FPS metadata used by downstream steps
+
+**`meta.json` schema:**
+```json
+{
+  "native_fps": 29.97,
+  "interval": 3,
+  "extracted_fps": 9.99
+}
+```
 
 !!! note
-    Frame extraction is idempotent — videos with existing frame directories are skipped.
+    Frame extraction is idempotent — videos with existing frame directories are skipped, including `meta.json` generation.
 
 !!! warning
     When using `--fps`, original frame indices are preserved in filenames (e.g. `frame_000030.jpg` for frame 30 at native 30 FPS sampled to 1 FPS). This ensures annotation lookups remain valid for the ResNet+LSTM pipeline, but sequences referencing unsampled frames will be silently skipped during `preprocess resnet`.
@@ -155,9 +171,42 @@ kpt_shape: [17, 3]
 | `yolo11s-pose` | Small | Fast | Better |
 | `yolo11m-pose` | Medium | Moderate | Best |
 
+### `keypoints` — Build Keypoint Sequence Dataset
+
+The full upstream pipeline for skeleton-based intent prediction. Runs YOLO-Pose on extracted frames, matches detections to JAAD pedestrian tracks via IoU, and builds normalized `(T, 17, 2)` keypoint sequences anchored to each pedestrian's `crossing_point`.
+
+```bash
+# Default (1s prediction horizon, T=16, yolo11n-pose)
+uv run pedsense preprocess keypoints
+
+# Recommended for 1fps extraction
+uv run pedsense preprocess keypoints --sequence-length 5 --prediction-horizon 1.0
+
+# Larger model, stricter matching, longer horizon
+uv run pedsense preprocess keypoints --pose-variant yolo11s-pose --iou-threshold 0.4 --prediction-horizon 2.0
+
+# Single video test
+uv run pedsense preprocess keypoints --video video_0001
+```
+
+**Output:** `data/processed/keypoints/sequences/{train,val}/*.npy` and `labels.csv`
+
+**Key design decisions:**
+
+- Windows end **before** `crossing_point` by at least `--prediction-horizon` seconds — prevents the model from seeing the crossing in progress
+- Keypoints normalized relative to JAAD bbox center and height — view- and scale-invariant
+- Frames with `occlusion == "full"` are rejected; any window containing one is dropped
+- FPS is read from `meta.json` (written by `preprocess frames`) so the horizon is correct for any extraction rate
+
+!!! important
+    Requires frames to be extracted first. Run `preprocess frames` before `preprocess keypoints`.
+
+!!! tip
+    When extracting at low FPS (e.g. `--fps 1`), reduce `--sequence-length` proportionally. At 1fps, `--sequence-length 5` gives 5 seconds of observation — sufficient for gait/posture context.
+
 ### `all` — Full Pipeline
 
-Runs `frames`, `yolo`, and `resnet` sequentially. Does **not** include `pose` (run it separately after).
+Runs `frames`, `yolo`, and `resnet` sequentially. Does **not** include `pose` or `keypoints` (run those separately after).
 
 ```bash
 # Default (cross, pedestrian only)

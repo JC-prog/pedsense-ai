@@ -12,7 +12,7 @@ uv run pedsense resume
 
 `resume` is an interactive command that:
 
-1. Lists all YOLO models in `models/custom/` that have a `weights/last.pt` checkpoint
+1. Lists all YOLO models in `models/detector/` that have a `weights/last.pt` checkpoint
 2. Prompts you to select a model by number
 3. Prompts for how many additional epochs to train
 4. Resumes training from `last.pt` and saves the result to a new directory
@@ -36,7 +36,7 @@ Selected: my_detector_20260301_224937 (10 epochs trained so far)
 Additional epochs to train: 10
 Training 10 more epochs → total 20 epochs
 ...
-Resumed model saved to: models/custom/my_detector_20260301_224937_resumed_20260302_100000
+Resumed model saved to: models/detector/my_detector_20260301_224937_resumed_20260302_100000
 ```
 
 ## Output
@@ -44,7 +44,7 @@ Resumed model saved to: models/custom/my_detector_20260301_224937_resumed_202603
 The resumed model is saved to a new directory:
 
 ```
-models/custom/{original_name}_resumed_{YYYYMMDD_HHMMSS}/
+models/detector/{original_name}_resumed_{YYYYMMDD_HHMMSS}/
 ├── weights/
 │   ├── best.pt
 │   └── last.pt
@@ -84,5 +84,5 @@ Once you have a well-trained detector, pass it to the hybrid pipeline to skip re
 
 ```bash
 uv run pedsense train -m hybrid -n my_hybrid \
-  --yolo-model models/custom/my_detector_20260301_224937_resumed_20260302_100000/weights/best.pt
+  --yolo-model models/detector/my_detector_20260301_224937_resumed_20260302_100000/weights/best.pt
 ```

@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.6.3] - 2026-03-27
+
+### Changed
+
+- `models/custom/` split into `models/detector/` (yolo, yolo-pose, hybrid) and `models/classifier/` (keypoint-lstm, resnet-lstm)
+- `CUSTOM_MODELS_DIR` constant replaced by `DETECTOR_MODELS_DIR` and `CLASSIFIER_MODELS_DIR` in `pedsense.config`
+- `pedsense setup` now creates both `models/detector/` and `models/classifier/`
+- `pedsense resume` scans `models/detector/` instead of `models/custom/`
+
+## [1.6.2] - 2026-03-27
+
+### Added
+
+- **2-Stage Intent pipeline in demo** — new pipeline selector in the Gradio UI lets you pair a YOLO-Pose pose detector with a trained KeypointLSTM model for online crossing intent classification
+- `_run_keypoint_lstm_inference()` — online inference runner using YOLO byte-tracker for stable per-pedestrian IDs; per-track deques buffer T normalized keypoint frames before triggering LSTM classification; bounding boxes shown in yellow while buffering, green/red once classified
+- `_list_models_by_type()` — scans `models/detector/` and `models/classifier/` and groups results into `detection` (yolo/yolo-pose/hybrid) and `keypoint-lstm` buckets for UI filtering
+- `_load_keypoint_lstm_model()` — loads `KeypointLSTM` weights and reads `input_size` and `sequence_length` from `config.json`
+- `sequence_length` field written to `config.json` after `train -m keypoint-lstm` — detected from the first training sample so the demo can size frame buffers without extra arguments
+
+### Changed
+
+- `run_inference` signature extended with `pipeline` and `intent_model_name` parameters; routes to the appropriate runner based on pipeline selection
+- Demo UI now shows two model dropdowns in 2-Stage mode (pose detector + intent model); labels and choices update dynamically when the pipeline radio changes
+- `keypoint-lstm` model type now returns a useful error message in Detection Only mode, directing the user to switch to the 2-Stage pipeline
+
 ## [Unreleased] - v2.0.0
 
 ### Added

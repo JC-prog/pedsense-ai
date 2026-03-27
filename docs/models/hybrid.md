@@ -57,7 +57,7 @@ Ground-truth bounding boxes are used to crop pedestrian regions from training fr
 
 ## Output
 
-Saved to `models/custom/{name}_{datetime}/`:
+Saved to `models/detector/{name}_{datetime}/`:
 
 ```
 yolo_detector.pt        # YOLO pedestrian detector weights

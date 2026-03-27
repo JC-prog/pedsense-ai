@@ -47,7 +47,7 @@ See [YOLO Format](../dataset/yolo-format.md) for details.
 
 ## Output
 
-Saved to `models/custom/{name}_{datetime}/`:
+Saved to `models/detector/{name}_{datetime}/`:
 
 ```
 weights/
@@ -64,7 +64,7 @@ Ultralytics automatically generates training plots and metrics.
 ```python
 from ultralytics import YOLO
 
-model = YOLO("models/custom/my_yolo_20260214/weights/best.pt")
+model = YOLO("models/detector/my_yolo_20260214/weights/best.pt")
 results = model("path/to/video.mp4")
 ```
 

@@ -31,7 +31,10 @@ uv run pedsense train --model MODEL [OPTIONS]
 
 ## Output
 
-Trained models are saved to `models/custom/{name}_{YYYYMMDD_HHMMSS}/`.
+Trained models are saved based on type:
+
+- Detection models (`yolo`, `yolo-detector`, `yolo-pose`, `hybrid`) → `models/detector/{name}_{YYYYMMDD_HHMMSS}/`
+- Intent classifiers (`resnet-lstm`, `keypoint-lstm`) → `models/classifier/{name}_{YYYYMMDD_HHMMSS}/`
 
 The `--name` flag sets the prefix. DateTime is always appended automatically.
 
@@ -146,7 +149,7 @@ uv run pedsense train -m hybrid -n experiment1 -e 30 -b 16
 uv run pedsense train -m hybrid -n experiment1 --yolo-epochs 30 --lr 2e-4
 
 # Reuse an existing YOLO detector (skip stage 1)
-uv run pedsense train -m hybrid -n experiment1 --yolo-model models/custom/my_yolo/weights/best.pt
+uv run pedsense train -m hybrid -n experiment1 --yolo-model models/detector/my_yolo/weights/best.pt
 ```
 
 Saves `yolo_detector.pt`, `resnet_classifier.pt`, and `config.json`.

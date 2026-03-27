@@ -68,7 +68,8 @@ data/raw/frames/        # Extracted frames (generated)
 data/processed/yolo/    # YOLO-formatted dataset (generated)
 data/processed/resnet/  # ResNet+LSTM sequences (generated)
 models/base/            # Downloaded pretrained weights
-models/custom/          # Your trained models
+models/detector/        # Detection models (yolo, yolo-pose, hybrid)
+models/classifier/      # Intent classifiers (keypoint-lstm, resnet-lstm)
 ```
 
 ## Download JAAD Dataset

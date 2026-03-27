@@ -13,6 +13,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Standalone demo app using `onnxruntime` (no PyTorch dependency required)
 - Lighter deployment footprint for inference-only environments
 
+## [1.6.2] - 2026-03-27
+
+### Added
+
+- **2-Stage Intent pipeline in demo** — new pipeline selector in the Gradio UI lets you pair a YOLO-Pose pose detector with a trained KeypointLSTM model for online crossing intent classification
+- `_run_keypoint_lstm_inference()` — online inference runner using YOLO byte-tracker for stable per-pedestrian IDs; per-track deques buffer T normalized keypoint frames before triggering LSTM classification; bounding boxes shown in yellow while buffering, green/red once classified
+- `_list_models_by_type()` helper scans `models/detector/` and `models/classifier/` and groups models into `detection` and `keypoint-lstm` buckets for dropdown filtering
+- `sequence_length` now written to `config.json` by `train -m keypoint-lstm`, detected from the first training sample
+
+### Changed
+
+- `run_inference` signature extended with `pipeline` and `intent_model_name`; routes to the appropriate runner based on pipeline selection
+- Demo UI now shows two model dropdowns in 2-Stage mode; labels and choices update dynamically when the pipeline radio changes
+- `keypoint-lstm` model selected in Detection Only mode now returns a clear error directing the user to the 2-Stage pipeline
+
+## [1.6.3] - 2026-03-27
+
+### Changed
+
+- `models/custom/` split into `models/detector/` (yolo, yolo-pose, hybrid) and `models/classifier/` (keypoint-lstm, resnet-lstm) — avoids ambiguity when the demo needs to populate separate dropdowns for pose detectors vs. intent models
+- `CUSTOM_MODELS_DIR` constant replaced by `DETECTOR_MODELS_DIR` and `CLASSIFIER_MODELS_DIR` in `pedsense.config`
+- `pedsense setup` now creates both `models/detector/` and `models/classifier/`
+- `pedsense resume` scans `models/detector/` instead of `models/custom/`
+
+## [1.6.1] - 2026-03-26
+
+### Fixed
+
+- `preprocess keypoints` produced an empty `labels.csv` when frames were extracted at a lower FPS than native (e.g. `--fps 1`): sliding windows were built from all JAAD annotation indices (every native frame), but YOLO-Pose detections only existed for extracted frames, so every sequence failed the IoU check; windows now only include frames present in both the JAAD annotations and the extracted frame set
+
+### Changed
+
+- `preprocess frames` now writes `data/raw/frames/{vid_id}/meta.json` after extracting each video, recording `native_fps`, `interval`, and `extracted_fps`; source clips are no longer needed by any downstream step after frame extraction
+- `preprocess keypoints` now reads `extracted_fps` from `meta.json` (falls back to reading the clip, then to 30 fps) — fixes a correctness bug where downsampled extractions (e.g. 1 fps) would use native FPS for horizon conversion, producing far too large a gap and yielding zero windows
+- `--prediction-horizon` default changed from no horizon (1 frame before crossing) to `1.0` second, consistent with JAAD clip lengths
+
+## [1.6.0] - 2026-03-26
+
+### Added
+
+- `preprocess keypoints` step — full upstream keypoint pipeline: runs YOLO-Pose on extracted frames, matches detections to JAAD pedestrian tracks via IoU, builds sliding-window sequences `(T, 17, 2)` anchored to `crossing_point`, and saves normalized `.npy` arrays to `data/processed/keypoints/`
+- `build_keypoint_dataset()` function in `pedsense.processing.keypoint_pipeline`
+- `--iou-threshold FLOAT` option for `pedsense preprocess` — minimum IoU to accept a YOLO-Pose detection as matching a JAAD track (default: `0.3`); applies to `keypoints` step
+- `--sequence-length INT` option for `pedsense preprocess` — frames per keypoint window (default: from config `16`); applies to `keypoints` step
+- `--sequence-stride INT` option for `pedsense preprocess` — step between consecutive windows in annotated frames (default: from config `8`); applies to `keypoints` step
+- `--prediction-horizon FLOAT` option for `pedsense preprocess` — seconds before `crossing_point` that observation windows must end by (e.g. `1.0` = predict at least 1 second before crossing); enforces a consistent prediction gap across all crossing samples; FPS is read from the source clip automatically; default allows windows up to 1 frame before crossing; applies to `keypoints` step
+- `KEYPOINTS_DIR` path constant in `pedsense.config`
+- Bounding-box-relative keypoint normalization: each joint `(kx, ky)` normalized by JAAD bbox center and height, making sequences view- and scale-invariant
+- Sequences anchored to `crossing_point` (first frame where `cross == "crossing"`): observation windows are constrained to end before the crossing event, preventing label leakage
+- Fully occluded frames (`occlusion == "full"` in JAAD) are rejected; any window containing one is dropped
+- `labels.csv` index with columns: `video_id`, `track_id`, `start_frame`, `end_frame`, `label`, `split`, `file`
+- Video-level train/val split (80/20, same seed as all other preprocessing steps) for consistent dataset partitioning
+
 ## [1.5.0] - 2026-03-07
 
 ### Added

@@ -68,7 +68,7 @@ See [ResNet Format](../dataset/resnet-format.md) for details.
 
 ## Output
 
-Saved to `models/custom/{name}_{datetime}/`:
+Saved to `models/classifier/{name}_{datetime}/`:
 
 ```
 best.pt         # Best validation weights
@@ -98,7 +98,7 @@ import torch
 from pedsense.train.resnet_lstm import ResNetLSTM
 
 model = ResNetLSTM(num_classes=2)
-model.load_state_dict(torch.load("models/custom/my_resnet/best.pt", weights_only=True))
+model.load_state_dict(torch.load("models/classifier/my_resnet/best.pt", weights_only=True))
 model.eval()
 ```
 

@@ -17,7 +17,8 @@ Creates all required directories for the project:
 - `data/processed/yolo/` — YOLO-formatted dataset
 - `data/processed/resnet/` — ResNet+LSTM sequences
 - `models/base/` — Downloaded pretrained model weights
-- `models/custom/` — Trained model outputs
+- `models/detector/` — Detection model outputs (yolo, yolo-pose, hybrid)
+- `models/classifier/` — Intent classifier outputs (keypoint-lstm, resnet-lstm)
 
 ## Example
 
