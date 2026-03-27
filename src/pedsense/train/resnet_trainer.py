@@ -13,7 +13,7 @@ from PIL import Image
 from rich.console import Console
 from rich.progress import track
 
-from pedsense.config import CUSTOM_MODELS_DIR, RESNET_DIR, SEQUENCE_LENGTH, CROP_SIZE
+from pedsense.config import CLASSIFIER_MODELS_DIR, RESNET_DIR, SEQUENCE_LENGTH, CROP_SIZE
 from pedsense.processing.annotations import ATTRIBUTE_LABELS
 from pedsense.train.resnet_lstm import ResNetLSTM
 
@@ -85,13 +85,13 @@ def train_resnet_lstm(
 
     Returns path to saved model directory.
     """
-    CUSTOM_MODELS_DIR.mkdir(parents=True, exist_ok=True)
+    CLASSIFIER_MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
     # Build output name
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     prefix = name if name else "resnet-lstm"
     output_name = f"{prefix}_{timestamp}"
-    output_dir = CUSTOM_MODELS_DIR / output_name
+    output_dir = CLASSIFIER_MODELS_DIR / output_name
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Select device

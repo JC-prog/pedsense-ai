@@ -13,11 +13,16 @@ PROCESSED_DIR = PROJECT_ROOT / "data" / "processed"
 YOLO_DIR = PROCESSED_DIR / "yolo"
 RESNET_DIR = PROCESSED_DIR / "resnet"
 POSE_DIR = PROCESSED_DIR / "pose"
+KEYPOINTS_DIR = PROCESSED_DIR / "keypoints"
 
 # Models
 MODELS_DIR = PROJECT_ROOT / "models"
 BASE_MODELS_DIR = MODELS_DIR / "base"
-CUSTOM_MODELS_DIR = MODELS_DIR / "custom"
+DETECTOR_MODELS_DIR = MODELS_DIR / "detector"      # detection models (yolo, yolo-pose, hybrid)
+CLASSIFIER_MODELS_DIR = MODELS_DIR / "classifier"  # intent classifiers (keypoint-lstm, resnet-lstm)
+
+# Legacy alias — kept so any external code referencing CUSTOM_MODELS_DIR still resolves
+CUSTOM_MODELS_DIR = DETECTOR_MODELS_DIR
 
 # Training defaults
 IMAGE_WIDTH = 1920

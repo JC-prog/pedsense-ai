@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import cv2
@@ -56,3 +57,10 @@ def extract_frames(video_id: str | None = None, fps: float | None = None) -> Non
                 frame_idx += 1
         finally:
             cap.release()
+
+        meta = {
+            "native_fps": native_fps,
+            "interval": interval,
+            "extracted_fps": native_fps / interval if native_fps > 0 else 0.0,
+        }
+        (out_dir / "meta.json").write_text(json.dumps(meta, indent=2))

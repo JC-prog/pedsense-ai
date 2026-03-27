@@ -16,10 +16,11 @@ def setup():
         RESNET_DIR,
         POSE_DIR,
         BASE_MODELS_DIR,
-        CUSTOM_MODELS_DIR,
+        DETECTOR_MODELS_DIR,
+        CLASSIFIER_MODELS_DIR,
     )
 
-    for folder in [RAW_DIR, PROCESSED_DIR, FRAMES_DIR, YOLO_DIR, RESNET_DIR, POSE_DIR, BASE_MODELS_DIR, CUSTOM_MODELS_DIR]:
+    for folder in [RAW_DIR, PROCESSED_DIR, FRAMES_DIR, YOLO_DIR, RESNET_DIR, POSE_DIR, BASE_MODELS_DIR, DETECTOR_MODELS_DIR, CLASSIFIER_MODELS_DIR]:
         folder.mkdir(parents=True, exist_ok=True)
 
     console.print("[bold green]Project structure verified![/bold green]")
@@ -46,7 +47,7 @@ def attributes():
 def preprocess(
     step: str = typer.Argument(
         "all",
-        help="Processing step: frames, yolo, resnet, pose, or all",
+        help="Processing step: frames, yolo, resnet, pose, keypoints, or all",
     ),
     video_id: str = typer.Option(
         None,
@@ -81,15 +82,39 @@ def preprocess(
     conf: float = typer.Option(
         0.25,
         "--conf",
-        help="Detection confidence threshold for pose extraction (default: 0.25). Applies to: pose.",
+        help="Detection confidence threshold for pose/keypoint extraction (default: 0.25). Applies to: pose, keypoints.",
+    ),
+    iou_threshold: float = typer.Option(
+        0.3,
+        "--iou-threshold",
+        help="Minimum IoU to match a YOLO-Pose detection to a JAAD pedestrian track (default: 0.3). Applies to: keypoints.",
+    ),
+    sequence_length: int = typer.Option(
+        None,
+        "--sequence-length",
+        help="Number of frames per keypoint sequence window (default: from config). Applies to: keypoints.",
+    ),
+    sequence_stride: int = typer.Option(
+        None,
+        "--sequence-stride",
+        help="Step between consecutive keypoint windows in annotated frames (default: from config). Applies to: keypoints.",
+    ),
+    prediction_horizon: float | None = typer.Option(
+        1.0,
+        "--prediction-horizon",
+        help=(
+            "Seconds before crossing_point that observation windows must end by "
+            "(e.g. 1.0 = predict at least 1 second before crossing). "
+            "Default: 1.0 second. Applies to: keypoints."
+        ),
     ),
 ):
     """Extract frames and prepare datasets from raw JAAD data."""
-    from pedsense.processing import extract_frames, convert_to_yolo, convert_to_resnet, extract_pose_labels
+    from pedsense.processing import extract_frames, convert_to_yolo, convert_to_resnet, extract_pose_labels, build_keypoint_dataset
     from pedsense.processing.annotations import ATTRIBUTE_LABELS, TRACK_LABELS
 
-    if step not in ("all", "frames", "yolo", "resnet", "pose"):
-        console.print(f"[bold red]Unknown step '{step}'. Use: frames, yolo, resnet, pose, or all.[/bold red]")
+    if step not in ("all", "frames", "yolo", "resnet", "pose", "keypoints"):
+        console.print(f"[bold red]Unknown step '{step}'. Use: frames, yolo, resnet, pose, keypoints, or all.[/bold red]")
         raise typer.Exit(1)
 
     if step in ("all", "yolo", "resnet") and attribute not in ATTRIBUTE_LABELS:
@@ -133,13 +158,27 @@ def preprocess(
         data_yaml = extract_pose_labels(model_variant=pose_variant, video_id=video_id, conf=conf)
         console.print(f"[bold green]Pose dataset ready: {data_yaml}[/bold green]")
 
+    if step == "keypoints":
+        console.print(f"[bold cyan]Building keypoint sequence dataset ({pose_variant})...[/bold cyan]")
+        from pedsense.config import SEQUENCE_LENGTH, SEQUENCE_STRIDE
+        labels_csv = build_keypoint_dataset(
+            model_variant=pose_variant,
+            conf=conf,
+            iou_threshold=iou_threshold,
+            sequence_length=sequence_length if sequence_length is not None else SEQUENCE_LENGTH,
+            sequence_stride=sequence_stride if sequence_stride is not None else SEQUENCE_STRIDE,
+            prediction_horizon=prediction_horizon,
+            video_id=video_id,
+        )
+        console.print(f"[bold green]Keypoint dataset ready: {labels_csv}[/bold green]")
+
 
 @app.command()
 def train(
     model: str = typer.Option(
         ...,
         "--model", "-m",
-        help="Model to train: yolo, yolo-detector, yolo-pose, resnet-lstm, hybrid",
+        help="Model to train: yolo, yolo-detector, yolo-pose, resnet-lstm, hybrid, keypoint-lstm",
     ),
     name: str = typer.Option(
         None,
@@ -171,7 +210,12 @@ def train(
     lr: float = typer.Option(
         None,
         "--lr",
-        help="Learning rate (default: 1e-4). Applies to: resnet-lstm, hybrid.",
+        help="Learning rate (default: 1e-4 for resnet-lstm/hybrid, 1e-3 for keypoint-lstm). Applies to: resnet-lstm, hybrid, keypoint-lstm.",
+    ),
+    hidden_size: int = typer.Option(
+        128,
+        "--hidden-size",
+        help="LSTM hidden state size (default: 128). Applies to: keypoint-lstm.",
     ),
     yolo_epochs: int = typer.Option(
         50,
@@ -210,7 +254,7 @@ def train(
     ),
 ):
     """Train a model for pedestrian crossing intent prediction."""
-    from pedsense.train import train_yolo, train_yolo_detector, train_yolo_pose, train_resnet_lstm, train_hybrid
+    from pedsense.train import train_yolo, train_yolo_detector, train_yolo_pose, train_resnet_lstm, train_hybrid, train_keypoint_lstm
 
     if model == "yolo":
         console.print(f"[bold yellow]Training YOLO26 model ({yolo_variant})...[/bold yellow]")
@@ -228,8 +272,11 @@ def train(
     elif model == "hybrid":
         console.print("[bold yellow]Training Hybrid model (YOLO + ResNet)...[/bold yellow]")
         output = train_hybrid(name=name, yolo_model=yolo_model, epochs=epochs, batch_size=batch_size, learning_rate=lr or 1e-4, yolo_epochs=yolo_epochs, device=device)
+    elif model == "keypoint-lstm":
+        console.print("[bold yellow]Training KeypointLSTM model...[/bold yellow]")
+        output = train_keypoint_lstm(name=name, epochs=epochs, batch_size=batch_size, learning_rate=lr or 1e-3, hidden_size=hidden_size, device=device)
     else:
-        console.print(f"[bold red]Unknown model: {model}. Use 'yolo', 'yolo-detector', 'yolo-pose', 'resnet-lstm', or 'hybrid'.[/bold red]")
+        console.print(f"[bold red]Unknown model: {model}. Use 'yolo', 'yolo-detector', 'yolo-pose', 'resnet-lstm', 'hybrid', or 'keypoint-lstm'.[/bold red]")
         raise typer.Exit(1)
 
     console.print(f"[bold green]Model saved to: {output}[/bold green]")
@@ -242,11 +289,11 @@ def resume():
     import yaml
     from pathlib import Path
     from rich.table import Table
-    from pedsense.config import CUSTOM_MODELS_DIR
+    from pedsense.config import DETECTOR_MODELS_DIR
     from pedsense.train.yolo_trainer import train_yolo_resume
 
     models = []
-    for d in sorted(CUSTOM_MODELS_DIR.iterdir()):
+    for d in sorted(DETECTOR_MODELS_DIR.iterdir()):
         if not d.is_dir():
             continue
         if not (d / "weights" / "last.pt").exists():
@@ -323,7 +370,7 @@ def demo(
     model_path: str = typer.Option(
         None,
         "--model", "-m",
-        help="Model directory name or path. If not given, uses latest in models/custom/.",
+        help="Model directory name to pre-select in the demo. Detection models are in models/detector/, intent classifiers in models/classifier/.",
     ),
     port: int = typer.Option(7860, "--port", "-p", help="Gradio server port"),
 ):

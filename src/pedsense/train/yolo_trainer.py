@@ -10,7 +10,7 @@ from ultralytics import YOLO
 
 from pedsense.config import (
     BASE_MODELS_DIR,
-    CUSTOM_MODELS_DIR,
+    DETECTOR_MODELS_DIR,
     FRAMES_DIR,
     POSE_DIR,
     PROCESSED_DIR,
@@ -121,7 +121,7 @@ def train_yolo(
             f"YOLO dataset not found at {data_yaml}. Run 'pedsense preprocess yolo' first."
         )
 
-    CUSTOM_MODELS_DIR.mkdir(parents=True, exist_ok=True)
+    DETECTOR_MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
     # Build output name
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -144,7 +144,7 @@ def train_yolo(
         imgsz=imgsz,
         patience=patience,
         device=device,
-        project=str(CUSTOM_MODELS_DIR),
+        project=str(DETECTOR_MODELS_DIR),
         name=output_name,
         degrees=degrees,
         scale=scale,
@@ -153,7 +153,7 @@ def train_yolo(
         fliplr=fliplr,
     )
 
-    return CUSTOM_MODELS_DIR / output_name
+    return DETECTOR_MODELS_DIR / output_name
 
 
 def train_yolo_detector(
@@ -175,7 +175,7 @@ def train_yolo_detector(
     Prepares a single-class (pedestrian) dataset internally — no preprocessing step required.
     Returns path to the saved model directory.
     """
-    CUSTOM_MODELS_DIR.mkdir(parents=True, exist_ok=True)
+    DETECTOR_MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     prefix = name if name else "yolo-detector"
@@ -196,7 +196,7 @@ def train_yolo_detector(
         imgsz=imgsz,
         patience=patience,
         device=device,
-        project=str(CUSTOM_MODELS_DIR),
+        project=str(DETECTOR_MODELS_DIR),
         name=output_name,
         degrees=degrees,
         scale=scale,
@@ -205,7 +205,7 @@ def train_yolo_detector(
         fliplr=fliplr,
     )
 
-    return CUSTOM_MODELS_DIR / output_name
+    return DETECTOR_MODELS_DIR / output_name
 
 
 def train_yolo_pose(
@@ -228,7 +228,7 @@ def train_yolo_pose(
             f"Pose dataset not found at {data_yaml}. Run 'pedsense preprocess pose' first."
         )
 
-    CUSTOM_MODELS_DIR.mkdir(parents=True, exist_ok=True)
+    DETECTOR_MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     prefix = name if name else "yolo-pose"
@@ -247,11 +247,11 @@ def train_yolo_pose(
         imgsz=imgsz,
         patience=patience,
         device=device,
-        project=str(CUSTOM_MODELS_DIR),
+        project=str(DETECTOR_MODELS_DIR),
         name=output_name,
     )
 
-    return CUSTOM_MODELS_DIR / output_name
+    return DETECTOR_MODELS_DIR / output_name
 
 
 def train_yolo_resume(
@@ -287,8 +287,8 @@ def train_yolo_resume(
         batch=batch_size,
         imgsz=imgsz,
         device=device,
-        project=str(CUSTOM_MODELS_DIR),
+        project=str(DETECTOR_MODELS_DIR),
         name=output_name,
     )
 
-    return CUSTOM_MODELS_DIR / output_name
+    return DETECTOR_MODELS_DIR / output_name

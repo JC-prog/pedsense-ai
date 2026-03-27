@@ -17,7 +17,7 @@ from rich.progress import track
 
 from pedsense.config import (
     BASE_MODELS_DIR,
-    CUSTOM_MODELS_DIR,
+    DETECTOR_MODELS_DIR,
     FRAMES_DIR,
     CROP_SIZE,
     TRAIN_SPLIT,
@@ -110,12 +110,12 @@ def train_hybrid(
     """
     import random
 
-    CUSTOM_MODELS_DIR.mkdir(parents=True, exist_ok=True)
+    DETECTOR_MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     prefix = name if name else "hybrid"
     output_name = f"{prefix}_{timestamp}"
-    output_dir = CUSTOM_MODELS_DIR / output_name
+    output_dir = DETECTOR_MODELS_DIR / output_name
     output_dir.mkdir(parents=True, exist_ok=True)
 
     if device is None:
