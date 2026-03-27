@@ -153,3 +153,22 @@ uv run pedsense train -m hybrid -n experiment1 --yolo-model models/detector/my_y
 ```
 
 Saves `yolo_detector.pt`, `resnet_classifier.pt`, and `config.json`.
+
+### KeypointLSTM
+
+Lightweight LSTM classifier over normalized skeleton sequences `(T, 34)`. Requires `preprocess keypoints` to have been run first.
+
+```bash
+# Default settings
+uv run pedsense train -m keypoint-lstm -n my_lstm
+
+# More epochs, larger hidden state
+uv run pedsense train -m keypoint-lstm -n my_lstm -e 50 --hidden-size 256
+
+# Custom learning rate and batch size
+uv run pedsense train -m keypoint-lstm -n my_lstm -e 30 -b 64 --lr 5e-4
+```
+
+Saves `best.pt` (best validation F1), `last.pt`, `config.json`, and `results.csv`.
+
+**`results.csv` columns:** `epoch`, `train_loss`, `train_acc`, `val_loss`, `val_acc`, `val_f1`, `val_auc`

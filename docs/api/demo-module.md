@@ -107,20 +107,26 @@ Online 2-stage inference using YOLO tracking + KeypointLSTM classification.
 **Algorithm:**
 
 1. Run `pose_model.track(frame, persist=True)` each frame — byte-tracker assigns stable integer `track_id` values across frames
-2. For each tracked pedestrian, normalize the 17 keypoints relative to the bounding box center and height (identical to preprocessing normalization)
-3. Append the flattened `(34,)` keypoint vector to a per-track `deque(maxlen=T)`, where `T` is read from the LSTM model's `config.json`
-4. Once the deque reaches length `T`, stack it into `(T, 34)` and run the KeypointLSTM
-5. Display prediction + confidence on the bounding box; prediction is updated every subsequent frame as new keypoints are pushed in
+2. On the first frame with detections, validate that the model outputs keypoints (`r.keypoints is not None`). If not, raises `ValueError` with a message directing the user to select a YOLO-Pose model
+3. For each tracked pedestrian, normalize the 17 keypoints relative to the bounding box center and height (identical to preprocessing normalization)
+4. A per-track buffer (`deque(maxlen=T)`) is created **only** when valid keypoints are first seen for that track — pedestrians with no keypoint output never enter the buffer
+5. Once the deque reaches length `T`, stack it into `(T, 34)` and run the KeypointLSTM
+6. Display prediction + confidence on the bounding box; prediction is updated every subsequent frame as new keypoints are pushed in
 
 **Bounding box colors:**
 
-- **Yellow** — buffering (`N/T` frames collected)
+- **Yellow** — buffering (`N/T` frames collected, valid keypoints received)
+- **Yellow** — `"no keypoints"` label — pedestrian detected but pose model returned no keypoints for that track
 - **Green** — not-crossing (classified)
 - **Red** — crossing (classified)
 
 ---
 
 ## Helper Functions
+
+### `_resolve_model_dir(name: str) -> Path | None`
+
+Searches `models/detector/` then `models/classifier/` for a directory matching `name`. Returns the first match, or `None` if not found. Used by `run_inference` so model names from either directory work without hardcoding the base path.
 
 ### `_find_yolo_weights(model_dir: Path) -> Path | None`
 

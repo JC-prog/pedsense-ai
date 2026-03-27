@@ -51,11 +51,15 @@ For YOLO-Pose (skeleton-only):
 
 ### 2-Stage Intent
 
-- **Yellow** box — buffering (`buffering N/T` label shown until T frames are collected per track)
-- **Green** box — Not crossing (once classified)
-- **Red** box — Crossing (once classified)
+- **Yellow** box, `buffering N/T` — keypoints received, accumulating frames
+- **Yellow** box, `no keypoints` — pedestrian detected but pose model returned no keypoints for that track
+- **Green** box — Not crossing (classified)
+- **Red** box — Crossing (classified)
 - **Green** skeleton lines — drawn over each tracked pedestrian
 - `ID:{track_id} {label} {confidence}` label on each bounding box
+
+!!! warning
+    The Pose Detector must be a YOLO-Pose model. Selecting a standard YOLO detection model will produce a `"does not output keypoints"` error immediately. Train a pose model with `pedsense train -m yolo-pose` first.
 
 ## Examples
 

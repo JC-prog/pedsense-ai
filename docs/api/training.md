@@ -231,3 +231,65 @@ Train the hybrid pipeline: YOLO26 pedestrian detector + ResNet-50 intent classif
 2. **Stage 2:** Generate pedestrian crops from ground truth, train ResNet-50 classifier
 
 **Output files:** `yolo_detector.pt`, `resnet_classifier.pt`, `config.json`
+
+---
+
+## pedsense.train.keypoint_trainer
+
+`src/pedsense/train/keypoint_trainer.py`
+
+### Classes
+
+#### `KeypointSequenceDataset(Dataset)`
+
+PyTorch dataset for loading `(T, 17, 2)` keypoint sequences.
+
+```python
+KeypointSequenceDataset(split="train")
+```
+
+Reads from `data/processed/keypoints/labels.csv` and loads `.npy` files from the same directory.
+
+**`__getitem__` returns:** `(sequence: Tensor, label: int)` where sequence has shape `(T, 34)` — keypoints flattened from `(T, 17, 2)`
+
+### Functions
+
+#### `train_keypoint_lstm(name, epochs, batch_size, learning_rate, hidden_size, num_layers, dropout, device) -> Path`
+
+Train a KeypointLSTM on normalized keypoint sequences.
+
+Checkpoints on validation F1 — more meaningful than accuracy for the imbalanced crossing/not-crossing split in JAAD.
+
+**Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `name` | `str \| None` | `None` | Custom output name prefix (default: `"keypoint-lstm"`) |
+| `epochs` | `int` | `30` | Training epochs |
+| `batch_size` | `int` | `32` | Batch size |
+| `learning_rate` | `float` | `1e-3` | AdamW learning rate |
+| `hidden_size` | `int` | `128` | LSTM hidden state size |
+| `num_layers` | `int` | `2` | Number of LSTM layers |
+| `dropout` | `float` | `0.3` | Dropout rate |
+| `device` | `str \| None` | `None` | Device (auto-detects GPU) |
+
+**Returns:** Path to saved model directory
+
+**Requires:** `data/processed/keypoints/labels.csv` (run `preprocess keypoints` first)
+
+**Training details:**
+
+- AdamW optimizer with weight_decay=1e-4
+- CrossEntropyLoss with inverse-frequency class weights
+- CosineAnnealingLR scheduler
+- Checkpoints `best.pt` on highest validation F1
+- Logs train loss/acc and val loss/acc/F1/AUC each epoch
+
+**Output files:**
+
+| File | Contents |
+|------|----------|
+| `best.pt` | Weights at the epoch with highest validation F1 |
+| `last.pt` | Weights after the final epoch |
+| `config.json` | Architecture parameters, hyperparameters, `best_val_f1`, `sequence_length` |
+| `results.csv` | Per-epoch metrics: `epoch`, `train_loss`, `train_acc`, `val_loss`, `val_acc`, `val_f1`, `val_auc` |

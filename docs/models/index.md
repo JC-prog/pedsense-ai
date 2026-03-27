@@ -45,6 +45,6 @@ Models are saved by role to separate directories under `models/`:
 | YOLO-Pose | `models/detector/` | `weights/best.pt`, `weights/last.pt`, training metrics |
 | Hybrid | `models/detector/` | `yolo_detector.pt`, `resnet_classifier.pt`, `config.json` |
 | ResNet+LSTM | `models/classifier/` | `best.pt`, `last.pt`, `config.json` |
-| KeypointLSTM | `models/classifier/` | `best.pt`, `last.pt`, `config.json` |
+| KeypointLSTM | `models/classifier/` | `best.pt`, `last.pt`, `config.json`, `results.csv` |
 
 `config.json` for KeypointLSTM includes `sequence_length` so the demo can size the per-pedestrian frame buffer automatically.

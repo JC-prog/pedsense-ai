@@ -28,6 +28,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Demo UI now shows two model dropdowns in 2-Stage mode; labels and choices update dynamically when the pipeline radio changes
 - `keypoint-lstm` model selected in Detection Only mode now returns a clear error directing the user to the 2-Stage pipeline
 
+## [1.6.5] - 2026-03-28
+
+### Added
+
+- `results.csv` written to the KeypointLSTM model output directory after each training run — records `epoch`, `train_loss`, `train_acc`, `val_loss`, `val_acc`, `val_f1`, `val_auc` per epoch, consistent with YOLO trainer output
+
+## [1.6.4] - 2026-03-28
+
+### Fixed
+
+- 2-Stage Intent demo showed `buffering 0/T` indefinitely when a non-pose model was selected as the Pose Detector: per-track buffers were created for every bounding box regardless of whether keypoints were present, so the buffer existed but was never filled
+- Per-track buffers now created only on the first frame where valid keypoints are received for that track; pedestrians with no keypoint output show `"no keypoints"` instead of a frozen buffer counter
+- Added early validation: if `r.keypoints is None` on the first detected frame, inference stops with a clear error directing the user to select a YOLO-Pose model
+
+### Added
+
+- `_resolve_model_dir(name)` helper searches `models/detector/` then `models/classifier/` — `run_inference` resolves model paths from either directory without hardcoding
+
 ## [1.6.3] - 2026-03-27
 
 ### Changed

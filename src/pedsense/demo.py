@@ -370,6 +370,8 @@ def _run_keypoint_lstm_inference(
         "not_crossing": 0,
     }
 
+    pose_model_verified = False
+
     try:
         while True:
             ret, frame = cap.read()
@@ -383,17 +385,22 @@ def _run_keypoint_lstm_inference(
                 if r.boxes is None:
                     continue
 
+                # Fail fast if the selected model has no keypoint output
+                if not pose_model_verified:
+                    if r.keypoints is None:
+                        raise ValueError(
+                            "The selected pose detector does not output keypoints. "
+                            "Select a YOLO-Pose model (e.g. trained with 'train -m yolo-pose') "
+                            "as the Pose Detector."
+                        )
+                    pose_model_verified = True
+
                 track_ids = r.boxes.id
                 kpts = r.keypoints
 
                 for i, box in enumerate(r.boxes):
                     x1, y1, x2, y2 = map(int, box.xyxy[0])
                     tid = int(track_ids[i]) if track_ids is not None else i
-
-                    if tid not in seen_ids:
-                        seen_ids.add(tid)
-                        buffers[tid] = deque(maxlen=sequence_length)
-                        stats["pedestrians_tracked"] += 1
 
                     # Normalize keypoints relative to bounding box
                     if kpts is not None and i < len(kpts.xy):
@@ -404,10 +411,16 @@ def _run_keypoint_lstm_inference(
                         kp_norm = kp.copy()
                         kp_norm[:, 0] = (kp[:, 0] - cx) / bh
                         kp_norm[:, 1] = (kp[:, 1] - cy) / bh
+
+                        if tid not in seen_ids:
+                            seen_ids.add(tid)
+                            buffers[tid] = deque(maxlen=sequence_length)
+                            stats["pedestrians_tracked"] += 1
+
                         buffers[tid].append(kp_norm.flatten().astype(np.float32))
 
                     # Classify when the buffer has enough frames
-                    if len(buffers[tid]) == sequence_length:
+                    if tid in buffers and len(buffers[tid]) == sequence_length:
                         seq = np.stack(list(buffers[tid]))  # (T, 34)
                         tensor = torch.from_numpy(seq).unsqueeze(0).to(device)
                         with torch.no_grad():
@@ -425,10 +438,12 @@ def _run_keypoint_lstm_inference(
                         cls_name, prob = last_pred[tid]
                         color = COLORS[cls_name]
                         label = f"ID:{tid} {cls_name} {prob:.2f}"
+                    elif tid in buffers:
+                        color = COLOR_BUFFERING
+                        label = f"ID:{tid} buffering {len(buffers[tid])}/{sequence_length}"
                     else:
                         color = COLOR_BUFFERING
-                        filled = len(buffers.get(tid, []))
-                        label = f"ID:{tid} buffering {filled}/{sequence_length}"
+                        label = f"ID:{tid} no keypoints"
 
                     cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
                     cv2.putText(frame, label, (x1, max(0, y1 - 10)),
