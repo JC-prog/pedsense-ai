@@ -141,6 +141,13 @@ def train_keypoint_lstm(
 
     best_val_f1 = 0.0
 
+    results_csv = output_dir / "results.csv"
+    with open(results_csv, "w", newline="") as f:
+        csv.writer(f).writerow([
+            "epoch", "train_loss", "train_acc",
+            "val_loss", "val_acc", "val_f1", "val_auc",
+        ])
+
     for epoch in range(epochs):
         # Train
         model.train()
@@ -188,6 +195,17 @@ def train_keypoint_lstm(
             f"Val Loss: {val_loss/n_val:.4f}  Acc: {val_acc:.4f}  "
             f"F1: {val_f1:.4f}  AUC: {val_auc:.4f}"
         )
+
+        with open(results_csv, "a", newline="") as f:
+            csv.writer(f).writerow([
+                epoch + 1,
+                f"{train_loss/train_total:.6f}",
+                f"{train_acc:.6f}",
+                f"{val_loss/n_val:.6f}",
+                f"{val_acc:.6f}",
+                f"{val_f1:.6f}",
+                f"{val_auc:.6f}",
+            ])
 
         if val_f1 > best_val_f1:
             best_val_f1 = val_f1
