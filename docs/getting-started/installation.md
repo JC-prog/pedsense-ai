@@ -11,28 +11,64 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 - **GPU (recommended)** — CUDA-compatible NVIDIA GPU for training. CPU works for preprocessing and small experiments.
 
-## Clone and Install
+## Clone the Repository
 
 ```bash
 git clone https://github.com/JCProg/pedsense-ai.git
 cd pedsense-ai
-uv sync
 ```
 
-This installs all dependencies including PyTorch, Ultralytics, OpenCV, Gradio, and more.
+## Platform-Specific Installation
 
-## GPU Setup (CUDA)
+PyTorch wheels differ by platform. Use the script that matches your OS.
 
-PyTorch with CUDA 12.6 is automatically installed by `uv sync` — the project's `pyproject.toml` includes a `[[tool.uv.index]]` entry that routes `torch` and `torchvision` to the PyTorch CUDA wheel index.
-
-Verify GPU access after installation:
+### Linux (CUDA 12.6)
 
 ```bash
+bash scripts/setup_linux_cuda.sh
+```
+
+This runs `uv sync`, which pulls `torch` and `torchvision` from the PyTorch CUDA 12.6 wheel index automatically.
+
+### macOS (CPU / Apple Silicon MPS)
+
+macOS has no CUDA support. The setup script installs the standard PyPI builds, which include MPS (Metal Performance Shaders) acceleration on Apple Silicon.
+
+```bash
+bash scripts/setup_macos.sh
+source .venv/bin/activate
+```
+
+### Windows
+
+**With CUDA 12.6 (recommended for NVIDIA GPUs):**
+
+```powershell
+.\scripts\setup_windows.ps1
+.venv\Scripts\Activate.ps1
+```
+
+**CPU only:**
+
+```powershell
+.\scripts\setup_windows.ps1 -CpuOnly
+.venv\Scripts\Activate.ps1
+```
+
+## Verify GPU Access
+
+After installation, confirm PyTorch can see your hardware:
+
+```bash
+# NVIDIA GPU (Linux / Windows)
 uv run python -c "import torch; print(f'CUDA: {torch.cuda.is_available()}, Device: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else \"N/A\"}')"
+
+# Apple Silicon (macOS)
+uv run python -c "import torch; print(f'MPS: {torch.backends.mps.is_available()}')"
 ```
 
 !!! note
-    If you see `CUDA: False`, ensure your NVIDIA drivers are up to date and compatible with CUDA 12.6.
+    If CUDA shows `False` on Linux/Windows, ensure your NVIDIA drivers are up to date and compatible with CUDA 12.6.
 
 ## Verify Installation
 

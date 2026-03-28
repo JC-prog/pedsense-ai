@@ -49,11 +49,21 @@ The core upstream pipeline runs YOLO-Pose on JAAD frames, aligns detections to a
 # Install uv (if you don't have it)
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Clone and install (includes CUDA PyTorch for GPU training)
+# Clone the repository
 git clone https://github.com/JCProg/pedsense-ai.git
 cd pedsense-ai
-uv sync
 ```
+
+Use the setup script for your platform:
+
+| Platform | Command |
+|----------|---------|
+| **Linux** (CUDA 12.6) | `bash scripts/setup_linux_cuda.sh` |
+| **macOS** (CPU / MPS) | `bash scripts/setup_macos.sh` |
+| **Windows** (CUDA 12.6) | `.\scripts\setup_windows.ps1` |
+| **Windows** (CPU only) | `.\scripts\setup_windows.ps1 -CpuOnly` |
+
+> macOS has no CUDA support. The macOS script installs standard PyPI wheels with MPS acceleration for Apple Silicon.
 
 ### 2. Download JAAD Dataset
 
