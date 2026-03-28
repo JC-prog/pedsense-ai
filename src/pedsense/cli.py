@@ -44,6 +44,85 @@ def attributes():
 
 
 @app.command()
+def download(
+    repo_id: str = typer.Argument(
+        ...,
+        help="Hugging Face repo ID (e.g. JCProg/pedsense-yolo).",
+    ),
+    name: str = typer.Option(
+        None,
+        "--name", "-n",
+        help="Local folder name for the model. Defaults to the repo name (part after '/').",
+    ),
+    force: bool = typer.Option(
+        False,
+        "--force", "-f",
+        is_flag=True,
+        help="Overwrite an existing local model folder.",
+    ),
+):
+    """Download a PedSense model from Hugging Face Hub into the correct local directory."""
+    import shutil
+    from pathlib import Path
+    from huggingface_hub import snapshot_download
+    from huggingface_hub.utils import RepositoryNotFoundError, HfHubHTTPError
+    from pedsense.config import DETECTOR_MODELS_DIR, CLASSIFIER_MODELS_DIR
+    from pedsense.demo import _detect_model_type
+
+    local_name = name or repo_id.split("/")[-1]
+
+    console.print(f"[bold cyan]Downloading [/bold cyan][bold]{repo_id}[/bold] from Hugging Face Hub...")
+    try:
+        cached_dir = snapshot_download(repo_id=repo_id)
+    except RepositoryNotFoundError:
+        console.print(f"[bold red]Repository not found: '{repo_id}'. Check the repo ID and your access.[/bold red]")
+        raise typer.Exit(1)
+    except HfHubHTTPError as e:
+        console.print(f"[bold red]Network error while contacting Hugging Face Hub:[/bold red] {e}")
+        raise typer.Exit(1)
+    except Exception as e:
+        console.print(f"[bold red]Unexpected download error:[/bold red] {e}")
+        raise typer.Exit(1)
+
+    cached_path = Path(cached_dir)
+    model_type = _detect_model_type(cached_path)
+
+    DETECTOR_TYPES = {"yolo", "yolo-pose", "hybrid"}
+    CLASSIFIER_TYPES = {"keypoint-lstm", "resnet-lstm"}
+
+    if model_type in DETECTOR_TYPES:
+        dest_base = DETECTOR_MODELS_DIR
+    elif model_type in CLASSIFIER_TYPES:
+        dest_base = CLASSIFIER_MODELS_DIR
+    else:
+        console.print(
+            f"[bold yellow]Warning: unrecognised model type '{model_type}'. "
+            f"Placing under models/detector/ — move manually if needed.[/bold yellow]"
+        )
+        dest_base = DETECTOR_MODELS_DIR
+
+    dest = dest_base / local_name
+
+    if dest.exists():
+        if not force:
+            console.print(
+                f"[bold yellow]'{local_name}' already exists at {dest}\n"
+                f"Use --force / -f to overwrite.[/bold yellow]"
+            )
+            raise typer.Exit(1)
+        console.print(f"[yellow]--force: removing existing {dest}[/yellow]")
+        shutil.rmtree(dest)
+
+    dest_base.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(str(cached_path), str(dest))
+
+    console.print(
+        f"[bold green]Model installed:[/bold green] "
+        f"[bold cyan]{local_name}[/bold cyan] ({model_type}) → {dest}"
+    )
+
+
+@app.command()
 def preprocess(
     step: str = typer.Argument(
         "all",
