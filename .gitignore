@@ -40,7 +40,9 @@ htmlcov/
 site/
 
 # Data and model artifacts (keep structure with .gitkeep)
-data/*
-!data/.gitkeep
-models/*
-!models/.gitkeep
+data/**
+!data/**/
+!data/**/.gitkeep
+models/**
+!models/**/
+!models/**/.gitkeep
