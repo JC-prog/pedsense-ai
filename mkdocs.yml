@@ -31,6 +31,7 @@ nav:
   - Getting Started:
     - Installation: getting-started/installation.md
     - Quickstart: getting-started/quickstart.md
+    - Using Pretrained Models: getting-started/pretrained-models.md
   - CLI Reference:
     - Overview: cli/index.md
     - setup: cli/setup.md
