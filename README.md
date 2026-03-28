@@ -41,6 +41,28 @@ The core upstream pipeline runs YOLO-Pose on JAAD frames, aligns detections to a
 
 ---
 
+## Pretrained Models
+
+Want to try the demo without training? Download the best models with a single command.
+
+| Role | Model | HF Repo |
+|------|-------|---------|
+| Pose Detector | YOLO26m-Pose · JAAD · 10 epochs | [JcProg/pedsense-yolo26m-pose-jaad-10e](https://huggingface.co/JcProg/pedsense-yolo26m-pose-jaad-10e) |
+| Intent Classifier | KeypointLSTM · JAAD · 50 epochs | [JcProg/pedsense-keypoint-lstm-jaad-50e](https://huggingface.co/JcProg/pedsense-keypoint-lstm-jaad-50e) |
+
+```bash
+uv run pedsense download JcProg/pedsense-yolo26m-pose-jaad-10e
+uv run pedsense download JcProg/pedsense-keypoint-lstm-jaad-50e
+```
+
+Then launch the demo and select the **2-Stage Intent (Pose + LSTM)** pipeline:
+
+```bash
+uv run pedsense demo
+```
+
+---
+
 ## Quick Start
 
 ### 1. Install
@@ -137,6 +159,7 @@ Open [http://localhost:7860](http://localhost:7860). Two pipelines are available
 | Command | Description |
 |---------|-------------|
 | `pedsense setup` | Create project directory structure |
+| `pedsense download <repo_id>` | Download a model from Hugging Face Hub into the correct local directory |
 | `pedsense preprocess [STEP]` | Extract frames and prepare datasets (`frames`, `yolo`, `resnet`, `pose`, `keypoints`, or `all`) |
 | `pedsense train -m MODEL` | Train a model (`yolo`, `yolo-detector`, `yolo-pose`, `resnet-lstm`, or `hybrid`) |
 | `pedsense resume` | Interactively resume a YOLO training run |

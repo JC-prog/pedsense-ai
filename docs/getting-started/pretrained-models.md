@@ -68,69 +68,38 @@ models/
 
 ---
 
-## Step-by-Step: YOLO26 Example
+## Downloading with the CLI
 
-1. **Run setup** (creates the `models/` directory tree):
+The easiest way to install a model is with `pedsense download`. It fetches the full Hugging Face repo, detects the model type, and places the files in the correct directory automatically.
 
-    ```bash
-    uv run pedsense setup
-    ```
+```bash
+# Download by repo ID — local folder name defaults to the repo name
+uv run pedsense download JCProg/pedsense-yolo
 
-2. **Create a folder** for the model:
+# Use a custom local name
+uv run pedsense download JCProg/pedsense-yolo --name my_yolo
 
-    ```bash
-    mkdir -p models/detector/my_yolo_model/weights
-    ```
+# Overwrite an existing folder
+uv run pedsense download JCProg/pedsense-yolo --force
+```
 
-3. **Move the downloaded weights** into that folder:
+Then launch the demo — the model will appear in the dropdown immediately:
 
-    ```bash
-    mv ~/Downloads/best.pt models/detector/my_yolo_model/weights/best.pt
-    ```
-
-4. **Launch the demo** — the model will appear in the dropdown automatically:
-
-    ```bash
-    uv run pedsense demo
-    ```
-
-    Or pre-select it directly:
-
-    ```bash
-    uv run pedsense demo -m my_yolo_model
-    ```
+```bash
+uv run pedsense demo
+# or pre-select it
+uv run pedsense demo -m my_yolo
+```
 
 ---
 
-## Step-by-Step: KeypointLSTM Example
+## Manual Installation (if needed)
 
-KeypointLSTM requires **two files**: the weights and a `config.json`. Both must be present for the demo to list it.
+If you have model files locally (e.g. downloaded outside of `pedsense download`), place them according to the layouts above, then run:
 
-1. Create the folder:
-
-    ```bash
-    mkdir -p models/classifier/my_kp_lstm
-    ```
-
-2. Move the files:
-
-    ```bash
-    mv ~/Downloads/best.pt       models/classifier/my_kp_lstm/best.pt
-    mv ~/Downloads/config.json   models/classifier/my_kp_lstm/config.json
-    ```
-
-3. Confirm `config.json` contains at minimum:
-
-    ```json
-    {
-      "model_type": "keypoint-lstm",
-      "sequence_length": 30
-    }
-    ```
-
-    The `sequence_length` value tells the demo how many frames to buffer per pedestrian before classifying.
-
-4. Launch the demo and select the **2-Stage Intent (Pose + LSTM)** pipeline. Your model will appear in the **Intent Model** dropdown.
+```bash
+uv run pedsense demo
+```
 
 ---
 
