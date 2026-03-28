@@ -264,6 +264,12 @@ uv run mkdocs serve    # Preview at localhost:8000
 
 ---
 
+## Roadmap
+
+- [ ] **`pedsense export`** — export trained models (KeypointLSTM, ResNet+LSTM) to ONNX for deployment in non-Python apps or environments without PyTorch. YOLO models already export natively via Ultralytics.
+
+---
+
 ## License
 
 **AGPL-3.0** — intentionally chosen for research community sharing.
