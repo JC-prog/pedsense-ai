@@ -12,7 +12,7 @@ uv run pedsense train --model MODEL [OPTIONS]
 
 | Option | Short | Default | Applies to | Description |
 |--------|-------|---------|------------|-------------|
-| `--model TEXT` | `-m` | *(required)* | all | Model type: `yolo`, `yolo-detector`, `yolo-pose`, `resnet-lstm`, or `hybrid` |
+| `--model TEXT` | `-m` | *(required)* | all | Model type: `yolo`, `yolo-detector`, `yolo-pose`, `resnet-lstm`, `hybrid`, or `keypoint-lstm` |
 | `--name TEXT` | `-n` | Model type | all | Custom name prefix for output folder |
 | `--epochs INT` | `-e` | `50` | all | Number of training epochs |
 | `--batch-size INT` | `-b` | `16` | all | Batch size |
@@ -20,7 +20,8 @@ uv run pedsense train --model MODEL [OPTIONS]
 | `--yolo-model TEXT` | | `None` | hybrid | Path to existing YOLO detector (skips stage 1) |
 | `--imgsz INT` | | `640` | yolo, yolo-detector, yolo-pose | Input image size. Common: `320` (fast), `640` (default), `1280` (best accuracy) |
 | `--patience INT` | | `100` | yolo, yolo-detector, yolo-pose | Early stopping: stop if no improvement for N epochs. `0` to disable |
-| `--lr FLOAT` | | `1e-4` | resnet-lstm, hybrid | Learning rate |
+| `--lr FLOAT` | | `1e-4` / `1e-3` | resnet-lstm, hybrid, keypoint-lstm | Learning rate (default `1e-3` for keypoint-lstm, `1e-4` for others) |
+| `--hidden-size INT` | | `128` | keypoint-lstm | LSTM hidden state size |
 | `--yolo-epochs INT` | | `50` | hybrid | Epochs for YOLO stage 1 detector |
 | `--device TEXT` | | auto | all | Training device: `'0'` (first GPU), `'cpu'`, `'0,1'` (multi-GPU) |
 | `--aug-degrees FLOAT` | | `0.0` | yolo, yolo-detector | Rotation augmentation range in degrees (e.g. `10` = random ±10°). `0` = off |
@@ -28,13 +29,19 @@ uv run pedsense train --model MODEL [OPTIONS]
 | `--aug-mosaic FLOAT` | | `1.0` | yolo, yolo-detector | Mosaic augmentation probability. `1.0` = always on, `0` = off |
 | `--aug-mixup FLOAT` | | `0.0` | yolo, yolo-detector | Mixup augmentation probability. `0` = off. Try `0.1`–`0.2` for better generalisation |
 | `--aug-fliplr FLOAT` | | `0.5` | yolo, yolo-detector | Horizontal flip probability. Set to `0` if pedestrian direction matters |
+| `--keypoints-dir TEXT` | | `data/processed/keypoints/` | keypoint-lstm | Dataset directory produced by `preprocess dataset`. Point to a named horizon dataset, e.g. `data/processed/crossing_kp_1s` |
+| `--sequence-length INT` | | `5` | keypoint-lstm | Frames per LSTM input window. At 10 fps: `5` = 0.5 s, `10` = 1 s of context |
+| `--sequence-stride INT` | | `1` | keypoint-lstm | Step between consecutive windows over a track's frames. Higher values reduce dataset size and training time |
 
 ## Output
 
-Trained models are saved based on type:
+Trained models are saved to type-specific subdirectories under `models/`:
 
-- Detection models (`yolo`, `yolo-detector`, `yolo-pose`, `hybrid`) → `models/detector/{name}_{YYYYMMDD_HHMMSS}/`
-- Intent classifiers (`resnet-lstm`, `keypoint-lstm`) → `models/classifier/{name}_{YYYYMMDD_HHMMSS}/`
+| Model type | Output directory |
+|---|---|
+| `yolo`, `yolo-detector`, `hybrid` | `models/detector/{name}_{YYYYMMDD_HHMMSS}/` |
+| `yolo-pose` | `models/detector-pose/{name}_{YYYYMMDD_HHMMSS}/` |
+| `resnet-lstm`, `keypoint-lstm` | `models/classifier-lstm/{name}_{YYYYMMDD_HHMMSS}/` |
 
 The `--name` flag sets the prefix. DateTime is always appended automatically.
 
@@ -156,19 +163,34 @@ Saves `yolo_detector.pt`, `resnet_classifier.pt`, and `config.json`.
 
 ### KeypointLSTM
 
-Lightweight LSTM classifier over normalized skeleton sequences `(T, 34)`. Requires `preprocess keypoints` to have been run first.
+Lightweight LSTM classifier over normalized skeleton sequences `(T, 34)`. Requires a dataset produced by `preprocess dataset --mode crossing_keypoint`.
 
 ```bash
-# Default settings
-uv run pedsense train -m keypoint-lstm -n my_lstm
+# Train on 1-second horizon dataset (sequence of 5 frames)
+uv run pedsense train -m keypoint-lstm -n lstm_1s -e 50 -b 16 \
+    --keypoints-dir data/processed/crossing_kp_1s
 
-# More epochs, larger hidden state
-uv run pedsense train -m keypoint-lstm -n my_lstm -e 50 --hidden-size 256
+# Train on 3-second horizon dataset with longer context window
+uv run pedsense train -m keypoint-lstm -n lstm_3s -e 50 -b 16 \
+    --keypoints-dir data/processed/crossing_kp_3s \
+    --sequence-length 10
 
-# Custom learning rate and batch size
-uv run pedsense train -m keypoint-lstm -n my_lstm -e 30 -b 64 --lr 5e-4
+# Larger hidden state, lower learning rate
+uv run pedsense train -m keypoint-lstm -n lstm_1s_big -e 100 \
+    --keypoints-dir data/processed/crossing_kp_1s \
+    --hidden-size 256 --lr 5e-4
 ```
 
+**Sequence length guidance** (dataset extracted at 10 fps):
+
+| `--sequence-length` | Context window | Notes |
+|---|---|---|
+| `5` (default) | 0.5 s | Fast training, good for 1s horizon |
+| `10` | 1.0 s | More temporal context, suits 3s+ horizon |
+| `15` | 1.5 s | Diminishing returns past ~1s for LSTM |
+
 Saves `best.pt` (best validation F1), `last.pt`, `config.json`, and `results.csv`.
+
+**`config.json` keys:** `model_type`, `input_size`, `sequence_length`, `sequence_stride`, `hidden_size`, `num_layers`, `dropout`, `epochs`, `batch_size`, `learning_rate`, `best_val_f1`
 
 **`results.csv` columns:** `epoch`, `train_loss`, `train_acc`, `val_loss`, `val_acc`, `val_f1`, `val_auc`

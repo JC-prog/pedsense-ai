@@ -28,23 +28,25 @@ PedSense-AI evaluates four architectures for pedestrian crossing intent predicti
 
 ### Demo Usage
 
-| Model | Demo Pipeline |
-|-------|--------------|
-| YOLO26 | Detection Only |
-| YOLO-Pose | Detection Only (skeleton visualization) |
-| Hybrid | Detection Only |
-| KeypointLSTM | 2-Stage Intent (Pose + LSTM) — requires a pose detector model |
+| Model | Demo Mode | Role |
+|-------|-----------|------|
+| YOLO26 (2-class) | Detector | Action detection — classifies current crossing state per frame |
+| YOLO26 (1-class detector) | Detector | Pedestrian detection only |
+| YOLO-Pose | Detector or Predictor (stage 1) | Skeleton visualization / keypoint extraction |
+| Hybrid | Detector | YOLO detects, ResNet classifies per crop |
+| KeypointLSTM | Predictor (stage 2) | Intent prediction from skeleton sequences |
+
+In **Predictor** mode the YOLO-Pose model and KeypointLSTM run together. An optional YOLO 2-class model can run alongside as an **action detector**, providing per-frame current-state labels below each bounding box.
 
 ## Output Format
 
-Models are saved by role to separate directories under `models/`:
+Models are saved to type-specific directories under `models/`:
 
 | Model | Save Location | Output Files |
 |-------|--------------|-------------|
-| YOLO26 | `models/detector/` | `weights/best.pt`, `weights/last.pt`, training metrics |
-| YOLO-Pose | `models/detector/` | `weights/best.pt`, `weights/last.pt`, training metrics |
-| Hybrid | `models/detector/` | `yolo_detector.pt`, `resnet_classifier.pt`, `config.json` |
-| ResNet+LSTM | `models/classifier/` | `best.pt`, `last.pt`, `config.json` |
-| KeypointLSTM | `models/classifier/` | `best.pt`, `last.pt`, `config.json`, `results.csv` |
+| YOLO26, YOLO26 detector, Hybrid | `models/detector/` | `weights/best.pt`, `weights/last.pt`, training metrics |
+| YOLO-Pose | `models/detector-pose/` | `weights/best.pt`, `weights/last.pt`, training metrics |
+| ResNet+LSTM, KeypointLSTM | `models/classifier-lstm/` | `best.pt`, `last.pt`, `config.json`, `results.csv` |
+| ST-GCN *(future)* | `models/classifier-stgcn/` | TBD |
 
-`config.json` for KeypointLSTM includes `sequence_length` so the demo can size the per-pedestrian frame buffer automatically.
+`config.json` for KeypointLSTM includes `sequence_length` and `sequence_stride` so the demo can size the per-pedestrian frame buffer automatically.

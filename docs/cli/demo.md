@@ -12,97 +12,130 @@ uv run pedsense demo [OPTIONS]
 
 | Option | Short | Default | Description |
 |--------|-------|---------|-------------|
-| `--model TEXT` | `-m` | Latest model | Model directory name (pre-selects in dropdown) |
+| `--model TEXT` | `-m` | Latest model | Model directory name to pre-select in the detector dropdown |
 | `--port INT` | `-p` | `7860` | Gradio server port |
 
-## Description
+## Modes
 
-Launches a web interface with two inference pipelines:
+The demo has two modes, selected via a radio button:
 
-**Detection Only** — classify pedestrian intent frame-by-frame using a single model:
+### Detector
 
-1. Upload a video
-2. Select a detection model from the dropdown
-3. Adjust the confidence threshold
-4. Run inference to get an annotated video
+Runs a single model on each frame. Use this for:
 
-**2-Stage Intent (Pose + LSTM)** — detect pedestrians with YOLO-Pose, then classify crossing intent using a trained KeypointLSTM:
+- Visualising a trained YOLO 2-class model (crossing / not-crossing classification per frame — action detection)
+- Visualising a YOLO-Pose model (skeleton overlay, no intent classification)
+- Hybrid model (YOLO detects, ResNet classifies each crop)
 
-1. Upload a video
-2. Switch the pipeline radio to **2-Stage Intent (Pose + LSTM)**
-3. Select a pose detector from the first dropdown (filtered to YOLO-Pose models)
-4. Select a KeypointLSTM intent model from the second dropdown
-5. Run inference
+**Controls:**
+
+| Control | Description |
+|---------|-------------|
+| Detection Model | Any model from `models/detector/` or `models/detector-pose/` |
+| Confidence Threshold | Minimum detection confidence (default 0.50) |
+
+### Predictor
+
+Two-stage pipeline: a YOLO-Pose model extracts skeleton keypoints per tracked pedestrian, and a KeypointLSTM classifies crossing intent over a sequence of frames.
+
+Optionally, a second YOLO model can run in parallel as an **action detector** — classifying the pedestrian's *current* state per frame independently of the LSTM.
+
+| Model role | What it answers |
+|---|---|
+| LSTM intent model | *"Will this pedestrian cross in the next N seconds?"* |
+| Action detector (optional) | *"Is this pedestrian crossing right now?"* |
+
+Together they cover the full timeline: the intent model fires before crossing, the action detector fires during it.
+
+**Controls:**
+
+| Control | Description |
+|---------|-------------|
+| Pose Detector | YOLO-Pose model from `models/detector-pose/` (required) |
+| Intent Model | KeypointLSTM from `models/classifier-lstm/` (required) |
+| Action Detector | YOLO 2-class detector from `models/detector/` (optional) |
+| Confidence Threshold | Detection confidence for the pose model (default 0.50) |
+| Prediction Smoothing | Rolling average window for LSTM outputs, 1–30 frames (default 10). Higher = smoother label, slower to react. Set to 1 to see raw per-frame predictions |
+
+## Refresh Models
+
+Click **Refresh Models** at any time while the demo is running to re-scan all model directories and update the dropdowns — no restart needed. Use this after copying a newly trained model into its folder.
 
 ## Visual Output
 
-### Detection Only
+### Detector mode
 
-For crossing intent models (YOLO, Hybrid):
+| Box color | Meaning |
+|-----------|---------|
+| Green | Not crossing (YOLO 2-class) |
+| Red | Crossing (YOLO 2-class) |
+| Cyan | Pedestrian detected (YOLO-Pose / 1-class detector) |
 
-- **Green** box — Not crossing
-- **Red** box — Crossing
+YOLO-Pose additionally draws:
 
-For YOLO-Pose (skeleton-only):
+- Green skeleton lines (COCO connections)
+- Amber dots (17 body keypoints)
 
-- **Cyan** box — pedestrian detection
-- **Green** lines — COCO skeleton connections
-- **Yellow** dots — 17 body keypoints
+### Predictor mode
 
-### 2-Stage Intent
+Each tracked pedestrian gets two annotations:
 
-- **Yellow** box, `buffering N/T` — keypoints received, accumulating frames
-- **Yellow** box, `no keypoints` — pedestrian detected but pose model returned no keypoints for that track
-- **Green** box — Not crossing (classified)
-- **Red** box — Crossing (classified)
-- **Green** skeleton lines — drawn over each tracked pedestrian
-- `ID:{track_id} {label} {confidence}` label on each bounding box
+**Top label** (LSTM intent — colored box):
+
+| Box color | Label | Meaning |
+|-----------|-------|---------|
+| Amber | `[N/T]` | Buffering — accumulating frames before first prediction |
+| Green | `not crossing  NN%` | Model predicts no crossing intent |
+| Red | `crossing  NN%` | Model predicts crossing intent |
+
+The confidence shown is the smoothed crossing probability (rolling mean over the last `smooth_window` LSTM outputs).
+
+**Bottom label** (action detector — darker tag below box, only shown if an action detector is selected):
+
+| Tag color | Label | Meaning |
+|-----------|-------|---------|
+| Dark green | `action: not crossing` | Pedestrian is not currently crossing |
+| Dark red | `action: crossing` | Pedestrian is currently crossing |
+
+The action label is matched to each pose-tracked pedestrian by IoU (threshold 0.3). If no YOLO detection overlaps sufficiently, no action tag is shown.
+
+!!! tip "Intent vs. action"
+    The LSTM intent label and the action detector label are complementary. A pedestrian approaching a crossing will show **intent: crossing** (LSTM fires early) while **action: not crossing** (they haven't stepped off the kerb yet). Once they begin crossing, the action detector confirms it even if LSTM uncertainty rises.
 
 !!! warning
-    The Pose Detector must be a YOLO-Pose model. Selecting a standard YOLO detection model will produce a `"does not output keypoints"` error immediately. Train a pose model with `pedsense train -m yolo-pose` first.
+    The Pose Detector must be a YOLO-Pose model (`train -m yolo-pose`). Selecting a standard YOLO detection model will raise a `"does not output keypoints"` error.
 
 ## Examples
 
 ```bash
-# Use the most recently trained model
+# Launch on default port
 uv run pedsense demo
 
-# Pre-select a detection model
-uv run pedsense demo -m my_yolo_20260214_153000
+# Pre-select a specific detector
+uv run pedsense demo -m my_detector_20260329_120000
 
 # Custom port
 uv run pedsense demo -p 8080
 ```
 
-## Supported Model Types
-
-| Model Type | Pipeline | Inference Approach | Output |
-|------------|----------|-------------------|--------|
-| YOLO | Detection Only | Frame-by-frame detection + classification | Colored boxes by intent |
-| YOLO-Pose | Detection Only | Keypoint detection with skeleton overlay | Cyan boxes + skeleton |
-| Hybrid | Detection Only | YOLO detects, ResNet classifies each crop | Colored boxes by intent |
-| YOLO-Pose + KeypointLSTM | 2-Stage Intent | YOLO-Pose tracks pedestrians, LSTM classifies sequences | Colored boxes with track IDs |
-
-!!! note
-    ResNet+LSTM models are not supported standalone in the demo — they require a separate pedestrian detector. Use the Hybrid model type for ResNet-based inference.
-
-## How 2-Stage Intent Works
-
-The KeypointLSTM pipeline runs online inference using YOLO's byte-tracker to assign stable pedestrian IDs across frames:
-
-1. Each frame is processed by the pose detector (`model.track()`)
-2. For each tracked pedestrian, keypoints are normalized relative to the bounding box center and height — the same normalization used during preprocessing
-3. Normalized keypoints are pushed into a per-pedestrian deque of length `T` (read from the model's `config.json`)
-4. Once the deque is full, the sequence `(T, 34)` is passed to the KeypointLSTM for classification
-5. The prediction is displayed on the bounding box and updated every frame once the buffer is full
-
 ## Model Discovery
 
-The demo automatically discovers trained models in `models/detector/` and `models/classifier/`. A model is listed if it has:
+The demo scans four directories automatically:
 
-- A `config.json` file (ResNet+LSTM, Hybrid, KeypointLSTM), **or**
-- Any `.pt` weights in a `weights/` subdirectory (YOLO, YOLO-Pose)
+| Directory | Models listed in |
+|-----------|-----------------|
+| `models/detector/` | Detector dropdown (Detector mode) |
+| `models/detector-pose/` | Detector dropdown + Pose Detector dropdown (Predictor mode) |
+| `models/classifier-lstm/` | Intent Model dropdown (Predictor mode) |
+| `models/classifier-stgcn/` | Intent Model dropdown (Predictor mode, future) |
 
-For the **2-Stage Intent** pipeline, the pose detector dropdown is filtered to models detected as `yolo`, `yolo-pose`, or `hybrid`. The intent model dropdown shows only `keypoint-lstm` models.
+A model is listed if it has a `weights/best.pt` (YOLO family) or a `config.json` + `best.pt` (LSTM/Hybrid).
 
-For YOLO models, weights are loaded with fallback priority: `best.pt` > `last.pt` > any other `.pt` file.
+## How the Predictor Pipeline Works
+
+1. Each frame is passed to the pose detector via `model.track()` — YOLO's built-in tracker assigns stable pedestrian IDs across frames
+2. For each pedestrian, keypoints are normalized relative to the detected bounding box center and height: `(kx - cx) / h`, `(ky - cy) / h`
+3. Normalized keypoints (flattened to 34 values) are pushed into a per-pedestrian deque of length `T` (read from `config.json`)
+4. Once full, the `(T, 34)` sequence is passed to the KeypointLSTM → crossing probability
+5. The raw crossing probability is pushed into a second deque of length `smooth_window`; the rolling mean is used to determine the displayed label and color
+6. If an action detector is loaded, it runs a separate forward pass on the same frame and results are IoU-matched to tracked boxes

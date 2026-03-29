@@ -5,6 +5,65 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.9.0] - 2026-03-29
+
+### Added
+
+- **Demo: Predictor mode with Action Detector** — optional YOLO 2-class model runs alongside the LSTM intent predictor; its per-frame crossing/not-crossing classification is displayed as a secondary label below each pedestrian bounding box, matched by IoU
+- **Demo: Prediction Smoothing slider** — rolling mean of the last N LSTM crossing probabilities (1–30 frames, default 10) eliminates per-frame label flickering without changing the model; set to 1 for raw unsmoothed output
+- **Demo: Refresh Models button** — re-scans all model directories and updates all dropdowns live without restarting the app
+- `--sequence-length INT` option on `train -m keypoint-lstm` — number of consecutive frames per LSTM input window (default `5`)
+- `--sequence-stride INT` option on `train -m keypoint-lstm` — step between consecutive windows over a track's annotated frames (default `1`)
+- `sequence_stride` now written to `config.json` alongside `sequence_length`
+
+### Changed
+
+- **Demo UI restructured**: pipeline selector replaced with a **Detector / Predictor** mode radio
+  - *Detector* — any model from `models/detector/` or `models/detector-pose/`; shows bounding boxes with per-frame labels
+  - *Predictor* — YOLO-Pose (stage 1) + KeypointLSTM (stage 2) with optional action detector
+- **Model folder structure** split into four purpose-specific subdirectories:
+  - `models/detector/` — YOLO 2-class, YOLO 1-class, Hybrid *(unchanged path)*
+  - `models/detector-pose/` — YOLO-Pose models *(previously saved to `models/detector/`)*
+  - `models/classifier-lstm/` — KeypointLSTM, ResNet-LSTM *(previously `models/classifier/`)*
+  - `models/classifier-stgcn/` — ST-GCN placeholder *(new)*
+- `train -m yolo-pose` now saves to `models/detector-pose/` instead of `models/detector/`
+- `train -m keypoint-lstm` and `train -m resnet-lstm` now save to `models/classifier-lstm/`
+- `pedsense resume` scans both `models/detector/` and `models/detector-pose/` for resumable YOLO runs
+- `train_yolo_resume` now uses the original model's parent directory as the output project, keeping resumed models in the same folder as the source
+
+## [1.7.0] - 2026-03-28
+
+### Added
+
+- `pedsense preprocess dataset` — new unified dataset builder that creates a named, self-contained folder under `data/processed/{name}/` with frame images copied alongside annotations for easy inspection
+- Three annotation modes:
+  - `pedestrian` — YOLO bounding-box labels (`.txt` files + `data.yaml`), ready for YOLO training
+  - `keypoint` — per-frame normalized 17-joint skeleton CSVs, one file per video per split; no crossing label
+  - `crossing_keypoint` — same as keypoint but with a `label` column (`1` = within `--horizon` frames before crossing anchor, `0` otherwise)
+- `--name TEXT` — required; names the output folder `data/processed/{name}/`
+- `--mode TEXT` — selects the annotation mode (`pedestrian`, `keypoint`, `crossing_keypoint`)
+- `--split TEXT` — configurable train/test/val ratios as three integers summing to 100 (e.g. `70/15/15`, default `70/15/15`); introduces a **test** split absent from all legacy preprocessing steps
+- `--horizon INT` — for `crossing_keypoint`, number of frames before `crossing_point` labeled as crossing (default `30`)
+- `--pose-model TEXT` — YOLO-Pose variant name or direct path to a `.pt` file (shared with `preprocess keypoints`)
+- `--with-frames` — extract frames from clips before building the dataset in a single command
+- `src/pedsense/processing/dataset_builder.py` — new module implementing all three modes; reuses `_iou`, `_normalize_keypoints`, `_run_pose_on_video` from `keypoint_pipeline.py` without duplication
+
+### Notes
+
+- All existing preprocessing commands (`preprocess yolo`, `preprocess resnet`, `preprocess keypoints`, etc.) remain unchanged for backward compatibility
+- Training integration with the new dataset format is deferred to a future release
+
+## [1.6.6] - 2026-03-28
+
+### Added
+
+- `--keypoints-dir TEXT` option on `preprocess keypoints` — specify a custom root output directory so multiple prediction horizons can be extracted without overwriting each other (e.g. `data/processed/keypoints_3s`, `data/processed/keypoints_5s`)
+- `--csv / --no-csv` flag on `preprocess keypoints` — saves sequences as flat CSV rows (`T × 34` float values per row) instead of individual `.npy` files; useful for inspection and sharing
+- `convert_sequences_csv_to_npy()` in `pedsense.processing.keypoint_pipeline` — converts CSV sequence files back to per-file `.npy` arrays and rewrites `labels.csv` with updated paths, enabling the trainer to run unchanged
+- `pedsense convert-sequences KEYPOINTS_DIR` CLI command — runs the CSV-to-npy adapter from the terminal
+- `--keypoints-dir TEXT` option on `train -m keypoint-lstm` — train on any horizon-specific dataset directory instead of the default `data/processed/keypoints/`
+- `--pose-variant` on `preprocess keypoints` now accepts a direct path to a trained `.pt` file in addition to variant names — allows using a fine-tuned YOLO-Pose model (e.g. from `train -m yolo-pose`) for keypoint extraction
+
 ## [Unreleased] - v2.0.0
 
 ### Added

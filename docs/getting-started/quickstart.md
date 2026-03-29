@@ -64,6 +64,34 @@ uv run pedsense train --model hybrid --name my_hybrid --yolo-model models/detect
 
 Detection models (yolo, hybrid) are saved to `models/detector/{name}_{datetime}/`. Intent classifiers (keypoint-lstm, resnet-lstm) are saved to `models/classifier/{name}_{datetime}/`.
 
+### KeypointLSTM (Skeleton-Based)
+
+The 2-stage intent pipeline — YOLO-Pose extracts keypoints, a lightweight LSTM classifies crossing intent from skeleton sequences.
+
+```bash
+# Step 1: Extract pose labels (generates YOLO-Pose training data)
+uv run pedsense preprocess pose
+
+# Step 2: Fine-tune a YOLO-Pose model
+uv run pedsense train -m yolo-pose -n my_pose_model -e 10 -b 16 --yolo-variant yolo11m-pose
+
+# Step 3: Build keypoint sequences (1s horizon, default output dir)
+uv run pedsense preprocess keypoints --sequence-length 5 --prediction-horizon 1.0
+
+# Step 4: Train KeypointLSTM
+uv run pedsense train -m keypoint-lstm -n my_lstm -e 50 -b 16
+```
+
+**Training at multiple prediction horizons** — run `preprocess keypoints` with `--keypoints-dir` to keep each horizon separate, then train a model per horizon:
+
+```bash
+uv run pedsense preprocess keypoints --prediction-horizon 3.0 --keypoints-dir data/processed/keypoints_3s
+uv run pedsense preprocess keypoints --prediction-horizon 5.0 --keypoints-dir data/processed/keypoints_5s
+
+uv run pedsense train -m keypoint-lstm -n my_lstm_3s -e 50 --keypoints-dir data/processed/keypoints_3s
+uv run pedsense train -m keypoint-lstm -n my_lstm_5s -e 50 --keypoints-dir data/processed/keypoints_5s
+```
+
 ## 5. Run the Demo
 
 ```bash

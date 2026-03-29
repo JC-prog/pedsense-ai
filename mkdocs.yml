@@ -39,6 +39,7 @@ nav:
     - train: cli/train.md
     - resume: cli/resume.md
     - demo: cli/demo.md
+    - convert-sequences: cli/convert-sequences.md
   - Models:
     - Overview: models/index.md
     - YOLO26: models/yolo.md

@@ -12,22 +12,42 @@ uv run pedsense preprocess [STEP] [OPTIONS]
 
 | Argument | Default | Description |
 |----------|---------|-------------|
-| `STEP` | `all` | Processing step: `frames`, `yolo`, `resnet`, `pose`, `keypoints`, or `all` |
+| `STEP` | `all` | Processing step: `frames`, `yolo`, `resnet`, `pose`, `keypoints`, `dataset`, or `all` |
 
 ## Options
+
+### Shared
 
 | Option | Short | Default | Applies to | Description |
 |--------|-------|---------|------------|-------------|
 | `--video TEXT` | `-v` | — | all | Process a single video (e.g., `video_0001`). Default: all videos |
-| `--fps FLOAT` | — | — | frames | Target FPS for frame extraction (e.g. `10`, `15`). Default: native FPS |
-| `--attribute TEXT` | `-a` | `cross` | yolo, resnet | Behavioral attribute for pedestrian classification. Run `pedsense attributes` to see options |
-| `--track-labels TEXT` | `-t` | — | yolo, resnet | Track label types to include. Repeat for multiple. Default: `pedestrian` only. Run `pedsense attributes` to see options |
-| `--pose-variant TEXT` | — | `yolo11n-pose` | pose, keypoints | YOLO-Pose model: `yolo11n-pose`, `yolo11s-pose`, `yolo11m-pose` |
-| `--conf FLOAT` | — | `0.25` | pose, keypoints | Detection confidence threshold |
-| `--iou-threshold FLOAT` | — | `0.3` | keypoints | Minimum IoU to match a YOLO-Pose detection to a JAAD pedestrian track |
-| `--sequence-length INT` | — | `16` | keypoints | Frames per keypoint sequence window |
-| `--sequence-stride INT` | — | `8` | keypoints | Step between consecutive windows (in extracted frames) |
+| `--fps FLOAT` | — | — | frames, dataset `--with-frames` | Target FPS for frame extraction. Default: native FPS |
+| `--conf FLOAT` | — | `0.25` | pose, keypoints, dataset | Detection confidence threshold |
+| `--iou-threshold FLOAT` | — | `0.3` | keypoints, dataset | Minimum IoU to match a YOLO-Pose detection to a JAAD track |
+
+### `frames`, `yolo`, `resnet`, `pose`, `keypoints` (legacy steps)
+
+| Option | Short | Default | Applies to | Description |
+|--------|-------|---------|------------|-------------|
+| `--attribute TEXT` | `-a` | `cross` | yolo, resnet | Behavioral attribute for pedestrian classification |
+| `--track-labels TEXT` | `-t` | — | yolo, resnet | Track label types to include. Repeat for multiple |
+| `--pose-variant TEXT` | — | `yolo11n-pose` | pose, keypoints | Variant name or path to `.pt` file |
+| `--sequence-length INT` | — | `16` | keypoints | Frames per sequence window |
+| `--sequence-stride INT` | — | `8` | keypoints | Step between consecutive windows |
 | `--prediction-horizon FLOAT` | — | `1.0` | keypoints | Seconds before `crossing_point` that windows must end by |
+| `--keypoints-dir TEXT` | — | `data/processed/keypoints/` | keypoints | Root output directory |
+| `--csv / --no-csv` | — | `--no-csv` | keypoints | Save as CSV rows instead of `.npy` files |
+
+### `dataset` step
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--name TEXT` | *(required)* | Output folder name. Creates `data/processed/{name}/` |
+| `--mode TEXT` | *(required)* | `pedestrian`, `keypoint`, or `crossing_keypoint` |
+| `--split TEXT` | `70/15/15` | Train/test/val ratios as integers summing to 100 |
+| `--pose-model TEXT` | `yolo11n-pose` | YOLO-Pose variant name or path to `.pt` file. Used by `keypoint` and `crossing_keypoint` modes |
+| `--horizon INT` | `30` | Frames before `crossing_point` labeled as crossing. Used by `crossing_keypoint` mode |
+| `--with-frames` | `False` | Extract frames from clips before building the dataset |
 
 ## Steps
 
@@ -189,7 +209,49 @@ uv run pedsense preprocess keypoints --pose-variant yolo11s-pose --iou-threshold
 uv run pedsense preprocess keypoints --video video_0001
 ```
 
-**Output:** `data/processed/keypoints/sequences/{train,val}/*.npy` and `labels.csv`
+**Multiple prediction horizons** — use `--keypoints-dir` to keep each horizon in its own directory so datasets don't overwrite each other:
+
+```bash
+# 1-second horizon (default path)
+uv run pedsense preprocess keypoints --prediction-horizon 1.0
+
+# 3-second horizon
+uv run pedsense preprocess keypoints \
+    --prediction-horizon 3.0 \
+    --keypoints-dir data/processed/keypoints_3s
+
+# 5-second horizon
+uv run pedsense preprocess keypoints \
+    --prediction-horizon 5.0 \
+    --keypoints-dir data/processed/keypoints_5s
+```
+
+**Using a fine-tuned YOLO-Pose model** — pass a path to your trained weights instead of a variant name. This is recommended when you have a model fine-tuned on JAAD, as it produces more accurate keypoint matches:
+
+```bash
+uv run pedsense preprocess keypoints \
+    --pose-variant models/detector/my_pose_model_20260307_234738/weights/best.pt \
+    --prediction-horizon 3.0 \
+    --keypoints-dir data/processed/keypoints_3s \
+    --sequence-length 5
+```
+
+**CSV output (adapter pattern)** — save as CSV first, convert to npy when ready to train. Useful for inspecting the data or sharing it without binary files:
+
+```bash
+# Save as CSV
+uv run pedsense preprocess keypoints \
+    --prediction-horizon 3.0 \
+    --keypoints-dir data/processed/keypoints_3s \
+    --csv
+
+# Convert CSV → npy for training (no trainer code changes needed)
+uv run pedsense convert-sequences data/processed/keypoints_3s
+```
+
+**Output (npy mode):** `<keypoints-dir>/sequences/{train,val}/*.npy` and `labels.csv`
+
+**Output (csv mode):** `<keypoints-dir>/sequences_train.csv`, `sequences_val.csv`, and `labels.csv`
 
 **Key design decisions:**
 
@@ -203,6 +265,104 @@ uv run pedsense preprocess keypoints --video video_0001
 
 !!! tip
     When extracting at low FPS (e.g. `--fps 1`), reduce `--sequence-length` proportionally. At 1fps, `--sequence-length 5` gives 5 seconds of observation — sufficient for gait/posture context.
+
+### `dataset` — Named, Inspectable Dataset
+
+Creates a self-contained dataset folder under `data/processed/{name}/`. Unlike the legacy steps, each run produces a named directory with frame images copied alongside their annotations — making it easy to open a sequence CSV and immediately find the corresponding frame images.
+
+**Three annotation modes:**
+
+#### `pedestrian` — YOLO bounding-box labels
+
+Extracts pedestrian bounding boxes from JAAD annotations and writes YOLO detection format labels (`.txt` files). Ready to use directly with any YOLO trainer.
+
+```bash
+uv run pedsense preprocess dataset \
+    --name pedestrian_crossing \
+    --mode pedestrian \
+    --split 70/15/15
+```
+
+Output:
+```
+data/processed/pedestrian_crossing/
+    frames/{split}/{video_id}/{video_id}_frame_{n:06d}.jpg
+    labels/{split}/{video_id}/{video_id}_frame_{n:06d}.txt   ← YOLO: class cx cy w h
+    data.yaml
+```
+
+#### `keypoint` — Per-frame skeleton CSVs (no label)
+
+Runs YOLO-Pose on extracted frames, IoU-matches detections to JAAD pedestrian tracks, and writes normalized 17-joint keypoints. One CSV per video per split. No crossing label — useful as a raw skeleton dataset.
+
+```bash
+uv run pedsense preprocess dataset \
+    --name keypoints_raw \
+    --mode keypoint \
+    --pose-model models/detector/my_pose_model_20260307_234738/weights/best.pt \
+    --split 70/15/15
+```
+
+`annotations/{split}/{video_id}.csv` columns: `track_id, frame, k0, k1, ..., k33`
+
+#### `crossing_keypoint` — Per-frame skeletons with crossing label
+
+Same as `keypoint` but adds a `label` column. A frame is labeled `1` (crossing) if it falls within `--horizon` frames before the pedestrian's `crossing_point` annotation; `0` otherwise.
+
+```bash
+uv run pedsense preprocess dataset \
+    --name crossing_kp_90f \
+    --mode crossing_keypoint \
+    --pose-model models/detector/my_pose_model_20260307_234738/weights/best.pt \
+    --horizon 90 \
+    --split 70/15/15
+```
+
+`annotations/{split}/{video_id}.csv` columns: `track_id, frame, label, k0, k1, ..., k33`
+
+**Output (keypoint and crossing_keypoint):**
+```
+data/processed/{name}/
+    frames/
+        train/video_0001/video_0001_frame_000030.jpg
+        test/video_0002/...
+        val/video_0003/...
+    annotations/
+        train/video_0001.csv
+        test/video_0002.csv
+        val/video_0003.csv
+    labels.csv    ← flat per-frame index across all videos and splits
+```
+
+**`labels.csv` columns (crossing_keypoint):**
+```
+video_id, track_id, frame, label, split, annotation_file, frame_file
+```
+
+**Also extract frames first:**
+
+```bash
+uv run pedsense preprocess dataset \
+    --name my_exp \
+    --mode crossing_keypoint \
+    --with-frames \
+    --fps 10 \
+    --pose-model yolo11m-pose \
+    --horizon 30 \
+    --split 70/15/15
+```
+
+!!! note
+    The `--horizon` is in **frames**, not seconds. At native 30 FPS, `--horizon 90` = 3 seconds before crossing. At 10 FPS, `--horizon 30` = 3 seconds before crossing.
+
+!!! tip
+    Use a different `--name` for each configuration to keep datasets separate and comparable:
+    ```bash
+    # 3-second horizon at native FPS
+    uv run pedsense preprocess dataset --name crossing_kp_3s --mode crossing_keypoint --horizon 90
+    # 5-second horizon
+    uv run pedsense preprocess dataset --name crossing_kp_5s --mode crossing_keypoint --horizon 150
+    ```
 
 ### `all` — Full Pipeline
 
