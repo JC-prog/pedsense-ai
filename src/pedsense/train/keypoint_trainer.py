@@ -13,41 +13,83 @@ from torch.utils.data import DataLoader, Dataset
 from rich.console import Console
 from rich.progress import track
 
-from pedsense.config import CLASSIFIER_MODELS_DIR, KEYPOINTS_DIR
+from pedsense.config import CLASSIFIER_LSTM_MODELS_DIR, KEYPOINTS_DIR
 from pedsense.train.resnet_lstm import KeypointLSTM
 
 console = Console()
 
 
 class KeypointSequenceDataset(Dataset):
-    """Loads (T, 17, 2) keypoint sequences from data/processed/keypoints/."""
+    """Builds sliding-window sequences from per-frame keypoint annotation CSVs.
 
-    def __init__(self, split: str = "train"):
-        self.sequences: list[tuple[Path, int]] = []
+    Reads the dataset produced by ``pedsense preprocess dataset --mode crossing_keypoint``
+    (or ``keypoint``). For each pedestrian track, consecutive annotated frames are
+    grouped into windows of ``sequence_length`` frames. The label of a window is the
+    label of its last frame.
 
-        labels_csv = KEYPOINTS_DIR / "labels.csv"
+    Args:
+        split: One of ``'train'``, ``'val'``, or ``'test'``.
+        keypoints_dir: Root of the dataset (e.g. ``data/processed/crossing_kp_1s/``).
+            Defaults to the legacy ``data/processed/keypoints/`` directory.
+        sequence_length: Number of frames per window (default 5).
+        sequence_stride: Step between consecutive windows (default 1).
+    """
+
+    def __init__(
+        self,
+        split: str = "train",
+        keypoints_dir: Path | None = None,
+        sequence_length: int = 5,
+        sequence_stride: int = 1,
+    ):
+        self.sequences: list[tuple[np.ndarray, int]] = []  # (T, 34), label
+
+        kdir = keypoints_dir or KEYPOINTS_DIR
+        labels_csv = kdir / "labels.csv"
         if not labels_csv.exists():
             raise FileNotFoundError(
-                f"Labels not found: {labels_csv}. "
-                "Run 'pedsense preprocess keypoints' first."
+                f"labels.csv not found in {kdir}. "
+                "Run 'pedsense preprocess dataset' first."
             )
 
+        # Collect unique annotation files for this split
+        ann_files: set[str] = set()
         with open(labels_csv) as f:
             for row in csv.DictReader(f):
-                if row["split"] != split:
-                    continue
-                seq_path = KEYPOINTS_DIR / row["file"]
-                if seq_path.exists():
-                    self.sequences.append((seq_path, int(row["label"])))
+                if row["split"] == split:
+                    ann_files.add(row["annotation_file"])
+
+        # Build sliding windows from each per-video annotation CSV
+        for rel_path in sorted(ann_files):
+            ann_csv = kdir / rel_path
+            if not ann_csv.exists():
+                continue
+
+            # Group rows by track_id
+            tracks: dict[str, list[tuple[int, int, list[float]]]] = {}
+            with open(ann_csv) as f:
+                for row in csv.DictReader(f):
+                    tid = row["track_id"]
+                    frame = int(row["frame"])
+                    label = int(row.get("label", 0))
+                    kpts = [float(row[f"k{i}"]) for i in range(34)]
+                    tracks.setdefault(tid, []).append((frame, label, kpts))
+
+            # Slide window over each track's annotated frames
+            for frames in tracks.values():
+                frames.sort(key=lambda x: x[0])
+                for i in range(0, len(frames) - sequence_length + 1, sequence_stride):
+                    window = frames[i : i + sequence_length]
+                    seq = np.array([w[2] for w in window], dtype=np.float32)  # (T, 34)
+                    label = window[-1][1]  # label of last frame in window
+                    self.sequences.append((seq, label))
 
     def __len__(self) -> int:
         return len(self.sequences)
 
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, int]:
-        path, label = self.sequences[idx]
-        seq = np.load(path)                  # (T, 17, 2)
-        seq = seq.reshape(seq.shape[0], -1)  # (T, 34)
-        return torch.from_numpy(seq).float(), label
+        seq, label = self.sequences[idx]
+        return torch.from_numpy(seq), label
 
 
 def _compute_class_weights(dataset: KeypointSequenceDataset) -> torch.Tensor:
@@ -86,6 +128,9 @@ def train_keypoint_lstm(
     num_layers: int = 2,
     dropout: float = 0.3,
     device: str | None = None,
+    keypoints_dir: Path | None = None,
+    sequence_length: int = 5,
+    sequence_stride: int = 1,
 ) -> Path:
     """Train a KeypointLSTM on keypoint sequences.
 
@@ -94,18 +139,18 @@ def train_keypoint_lstm(
 
     Returns path to saved model directory.
     """
-    CLASSIFIER_MODELS_DIR.mkdir(parents=True, exist_ok=True)
+    CLASSIFIER_LSTM_MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_dir = CLASSIFIER_MODELS_DIR / f"{name or 'keypoint-lstm'}_{timestamp}"
+    output_dir = CLASSIFIER_LSTM_MODELS_DIR / f"{name or 'keypoint-lstm'}_{timestamp}"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     if device is None:
         device = "cuda" if torch.cuda.is_available() else "cpu"
     dev = torch.device(device)
 
-    train_dataset = KeypointSequenceDataset(split="train")
-    val_dataset = KeypointSequenceDataset(split="val")
+    train_dataset = KeypointSequenceDataset(split="train", keypoints_dir=keypoints_dir, sequence_length=sequence_length, sequence_stride=sequence_stride)
+    val_dataset = KeypointSequenceDataset(split="val", keypoints_dir=keypoints_dir, sequence_length=sequence_length, sequence_stride=sequence_stride)
 
     if len(train_dataset) == 0:
         raise RuntimeError(
@@ -125,7 +170,6 @@ def train_keypoint_lstm(
     )
 
     sample, _ = train_dataset[0]
-    sequence_length = sample.shape[0]  # T
     input_size = sample.shape[-1]  # 34
 
     model = KeypointLSTM(
@@ -219,6 +263,7 @@ def train_keypoint_lstm(
             "model_type": "keypoint-lstm",
             "input_size": input_size,
             "sequence_length": sequence_length,
+            "sequence_stride": sequence_stride,
             "hidden_size": hidden_size,
             "num_layers": num_layers,
             "dropout": dropout,

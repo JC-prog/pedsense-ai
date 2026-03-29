@@ -18,11 +18,14 @@ KEYPOINTS_DIR = PROCESSED_DIR / "keypoints"
 # Models
 MODELS_DIR = PROJECT_ROOT / "models"
 BASE_MODELS_DIR = MODELS_DIR / "base"
-DETECTOR_MODELS_DIR = MODELS_DIR / "detector"      # detection models (yolo, yolo-pose, hybrid)
-CLASSIFIER_MODELS_DIR = MODELS_DIR / "classifier"  # intent classifiers (keypoint-lstm, resnet-lstm)
+DETECTOR_MODELS_DIR = MODELS_DIR / "detector"           # YOLO 2-class / 1-class, hybrid
+DETECTOR_POSE_MODELS_DIR = MODELS_DIR / "detector-pose" # YOLO-Pose keypoint detectors
+CLASSIFIER_LSTM_MODELS_DIR = MODELS_DIR / "classifier-lstm"   # KeypointLSTM, ResNet-LSTM
+CLASSIFIER_STGCN_MODELS_DIR = MODELS_DIR / "classifier-stgcn" # ST-GCN (future)
 
-# Legacy alias — kept so any external code referencing CUSTOM_MODELS_DIR still resolves
-CUSTOM_MODELS_DIR = DETECTOR_MODELS_DIR
+# Aliases
+CUSTOM_MODELS_DIR = DETECTOR_MODELS_DIR          # legacy external references
+CLASSIFIER_MODELS_DIR = CLASSIFIER_LSTM_MODELS_DIR  # backward compat
 
 # Training defaults
 IMAGE_WIDTH = 1920

@@ -112,9 +112,13 @@ def _run_pose_on_video(
 def _get_extracted_fps(vid_id: str, fallback: float = 30.0) -> float:
     """Return the effective FPS of extracted frames for a video.
 
-    Reads extracted_fps from data/raw/frames/{vid_id}/meta.json (written by
-    extract_frames). Falls back to reading the source clip for frames extracted
-    before meta.json was introduced, then to `fallback` if neither is available.
+    Resolution order:
+    1. meta.json (written by extract_frames — most reliable).
+    2. Infer from frame filenames on disk: compute median gap between consecutive
+       frame indices, then divide native FPS by that gap. Handles frames extracted
+       before meta.json was introduced.
+    3. Native FPS from source clip (only correct when no downsampling was used).
+    4. Hard fallback to `fallback` (default 30.0).
     """
     meta_path = FRAMES_DIR / vid_id / "meta.json"
     if meta_path.exists():
@@ -124,6 +128,25 @@ def _get_extracted_fps(vid_id: str, fallback: float = 30.0) -> float:
                 return fps
         except (OSError, KeyError, ValueError, json.JSONDecodeError):
             pass
+
+    # Infer interval from the actual frame files on disk
+    frame_dir = FRAMES_DIR / vid_id
+    if frame_dir.exists():
+        indices = sorted(
+            int(p.stem.removeprefix("frame_"))
+            for p in frame_dir.glob("frame_*.jpg")
+        )
+        if len(indices) >= 2:
+            gaps = [indices[i + 1] - indices[i] for i in range(min(len(indices) - 1, 20))]
+            interval = sorted(gaps)[len(gaps) // 2]  # median gap
+            if interval >= 1:
+                clip = CLIPS_DIR / f"{vid_id}.mp4"
+                if clip.exists():
+                    cap = cv2.VideoCapture(str(clip))
+                    native_fps = cap.get(cv2.CAP_PROP_FPS)
+                    cap.release()
+                    if native_fps > 0:
+                        return native_fps / interval
 
     clip = CLIPS_DIR / f"{vid_id}.mp4"
     if clip.exists():
@@ -163,6 +186,8 @@ def build_keypoint_dataset(
     sequence_stride: int = SEQUENCE_STRIDE,
     prediction_horizon: float | None = 1.0,
     video_id: str | None = None,
+    output_dir: Path | None = None,
+    save_csv: bool = False,
 ) -> Path:
     """Build the keypoint sequence dataset from JAAD annotations and extracted frames.
 
@@ -176,20 +201,38 @@ def build_keypoint_dataset(
             end by. Defaults to 1.0 second, giving the model a consistent prediction
             gap on JAAD clips. Pass None to revert to 1 frame before crossing_point.
         video_id: Process a single video only; default processes all.
+        output_dir: Root directory for this dataset. Defaults to data/processed/keypoints/.
+            Use a different path per horizon to avoid overwriting, e.g.
+            data/processed/keypoints_3s/ and data/processed/keypoints_5s/.
+        save_csv: If True, save sequences as CSV rows (flat T×34 float values) instead
+            of individual .npy files. The adapter ``convert_sequences_csv_to_npy`` can
+            convert them back to the npy format expected by the trainer.
 
     Returns:
         Path to labels.csv.
 
-    Output layout::
+    Output layout (npy mode)::
 
-        data/processed/keypoints/
+        <output_dir>/
             sequences/
                 train/{video_id}_{track_id}_{start_frame:06d}.npy  # (T, 17, 2)
                 val/{...}.npy
             labels.csv  # video_id, track_id, start_frame, end_frame, label, split, file
+
+    Output layout (csv mode)::
+
+        <output_dir>/
+            sequences_train.csv  # header row + one sequence per data row (T*34 columns)
+            sequences_val.csv
+            labels.csv
     """
-    for split in ("train", "val"):
-        (KEYPOINTS_DIR / "sequences" / split).mkdir(parents=True, exist_ok=True)
+    out = output_dir or KEYPOINTS_DIR
+
+    if save_csv:
+        out.mkdir(parents=True, exist_ok=True)
+    else:
+        for split in ("train", "val"):
+            (out / "sequences" / split).mkdir(parents=True, exist_ok=True)
 
     # Load all JAAD annotations
     annotations = load_all_annotations()
@@ -208,97 +251,127 @@ def build_keypoint_dataset(
     else:
         process_vids = all_vids
 
-    # Load pretrained YOLO-Pose model once
-    BASE_MODELS_DIR.mkdir(parents=True, exist_ok=True)
-    model = YOLO(str(BASE_MODELS_DIR / f"{model_variant}.pt"))
+    # Load YOLO-Pose model once — accept either a variant name or a direct path
+    model_path = Path(model_variant)
+    if model_path.is_absolute() or model_path.exists():
+        model = YOLO(str(model_path))
+    else:
+        BASE_MODELS_DIR.mkdir(parents=True, exist_ok=True)
+        model = YOLO(str(BASE_MODELS_DIR / f"{model_variant}.pt"))
 
     records: list[dict] = []
 
-    for vid_id in rtrack(process_vids, description="Building keypoint sequences..."):
-        ann = annotations[vid_id]
-        vid_dir = FRAMES_DIR / vid_id
+    # For CSV mode: open one file per split up front
+    csv_writers: dict[str, csv.writer] = {}
+    csv_files: list = []
+    if save_csv:
+        n_cols = sequence_length * 17 * 2
+        col_headers = [f"k{i}" for i in range(n_cols)]
+        for split_name in ("train", "val"):
+            csv_path = out / f"sequences_{split_name}.csv"
+            fh = open(csv_path, "w", newline="")  # noqa: WPS515
+            csv_files.append(fh)
+            w = csv.writer(fh)
+            w.writerow(["video_id", "track_id", "start_frame", "end_frame", "label"] + col_headers)
+            csv_writers[split_name] = w
 
-        if not vid_dir.exists():
-            continue  # frames not yet extracted for this video
+    try:
+        for vid_id in rtrack(process_vids, description="Building keypoint sequences..."):
+            ann = annotations[vid_id]
+            vid_dir = FRAMES_DIR / vid_id
 
-        split = "train" if vid_id in train_set else "val"
-        seq_dir = KEYPOINTS_DIR / "sequences" / split
+            if not vid_dir.exists():
+                continue  # frames not yet extracted for this video
 
-        # Run YOLO-Pose on all frames for this video (once, reused across all tracks)
-        pose_dets = _run_pose_on_video(vid_dir, model, conf)
+            split = "train" if vid_id in train_set else "val"
+            seq_dir = out / "sequences" / split
 
-        # Horizon in frames — computed once per video from extracted FPS (matches frames on disk)
-        horizon_frames: int | None = None
-        if prediction_horizon is not None:
-            fps = _get_extracted_fps(vid_id)
-            horizon_frames = max(1, round(prediction_horizon * fps))
+            # Run YOLO-Pose on all frames for this video (once, reused across all tracks)
+            pose_dets = _run_pose_on_video(vid_dir, model, conf)
 
-        for trk_idx, trk in enumerate(ann.tracks):
-            if trk.label not in PEDESTRIAN_LABELS or not trk.boxes:
-                continue
+            # Horizon in frames — computed once per video from extracted FPS (matches frames on disk)
+            horizon_frames: int | None = None
+            if prediction_horizon is not None:
+                fps = _get_extracted_fps(vid_id)
+                horizon_frames = max(1, round(prediction_horizon * fps))
 
-            # frame → BoundingBox lookup for this pedestrian track
-            boxes_by_frame = {box.frame: box for box in trk.boxes}
+            for trk_idx, trk in enumerate(ann.tracks):
+                if trk.label not in PEDESTRIAN_LABELS or not trk.boxes:
+                    continue
 
-            # Only include frames that have both a JAAD annotation AND an extracted
-            # frame on disk (i.e. a YOLO-Pose detection entry). This handles
-            # downsampled extractions (e.g. 1fps) where pose_dets only contains
-            # every Nth frame while JAAD annotates every native frame.
-            annotated_frames = sorted(f for f in boxes_by_frame if f in pose_dets)
+                # frame → BoundingBox lookup for this pedestrian track
+                boxes_by_frame = {box.frame: box for box in trk.boxes}
 
-            if len(annotated_frames) < sequence_length:
-                continue  # track too short for even one window
+                # Only include frames that have both a JAAD annotation AND an extracted
+                # frame on disk (i.e. a YOLO-Pose detection entry). This handles
+                # downsampled extractions (e.g. 1fps) where pose_dets only contains
+                # every Nth frame while JAAD annotates every native frame.
+                annotated_frames = sorted(f for f in boxes_by_frame if f in pose_dets)
 
-            first_crossing, last_frame = _track_crossing_info(boxes_by_frame)
-            label = 1 if first_crossing is not None else 0
+                if len(annotated_frames) < sequence_length:
+                    continue  # track too short for even one window
 
-            # Anchor = latest frame a window may end on.
-            # With no horizon: 1 frame before crossing (original behaviour).
-            # With horizon: crossing_point - horizon_frames, enforcing a fixed
-            # prediction gap so all crossing samples have the same difficulty.
-            if label == 1:
-                gap = horizon_frames if horizon_frames is not None else 1
-                anchor = first_crossing - gap
-            else:
-                anchor = last_frame
+                first_crossing, last_frame = _track_crossing_info(boxes_by_frame)
+                label = 1 if first_crossing is not None else 0
 
-            # Unique, stable track identifier for filenames
-            track_id = trk.boxes[0].track_id or str(trk_idx)
+                # Anchor = latest frame a window may end on.
+                # With no horizon: 1 frame before crossing (original behaviour).
+                # With horizon: crossing_point - horizon_frames, enforcing a fixed
+                # prediction gap so all crossing samples have the same difficulty.
+                if label == 1:
+                    gap = horizon_frames if horizon_frames is not None else 1
+                    anchor = first_crossing - gap
+                else:
+                    anchor = last_frame
 
-            # Sliding window over annotated frames (not raw frame indices,
-            # to handle any gaps in JAAD annotations)
-            i = 0
-            while i + sequence_length - 1 < len(annotated_frames):
-                window_frames = annotated_frames[i : i + sequence_length]
+                # Unique, stable track identifier for filenames
+                track_id = trk.boxes[0].track_id or str(trk_idx)
 
-                # Window must end at or before the crossing anchor
-                if window_frames[-1] > anchor:
-                    break
+                # Sliding window over annotated frames (not raw frame indices,
+                # to handle any gaps in JAAD annotations)
+                i = 0
+                while i + sequence_length - 1 < len(annotated_frames):
+                    window_frames = annotated_frames[i : i + sequence_length]
 
-                seq = _build_sequence(
-                    window_frames, boxes_by_frame, pose_dets, iou_threshold, sequence_length
-                )
+                    # Window must end at or before the crossing anchor
+                    if window_frames[-1] > anchor:
+                        break
 
-                if seq is not None:
-                    seq_name = f"{vid_id}_{track_id}_{window_frames[0]:06d}.npy"
-                    seq_path = seq_dir / seq_name
-                    np.save(seq_path, seq)
-
-                    records.append(
-                        {
-                            "video_id": vid_id,
-                            "track_id": track_id,
-                            "start_frame": window_frames[0],
-                            "end_frame": window_frames[-1],
-                            "label": label,
-                            "split": split,
-                            "file": str(seq_path.relative_to(KEYPOINTS_DIR)),
-                        }
+                    seq = _build_sequence(
+                        window_frames, boxes_by_frame, pose_dets, iou_threshold, sequence_length
                     )
 
-                i += sequence_stride
+                    if seq is not None:
+                        if save_csv:
+                            flat = seq.reshape(-1).tolist()
+                            csv_writers[split].writerow(
+                                [vid_id, track_id, window_frames[0], window_frames[-1], label] + flat
+                            )
+                            file_ref = f"sequences_{split}.csv"
+                        else:
+                            seq_name = f"{vid_id}_{track_id}_{window_frames[0]:06d}.npy"
+                            seq_path = seq_dir / seq_name
+                            np.save(seq_path, seq)
+                            file_ref = str(seq_path.relative_to(out))
 
-    labels_csv = KEYPOINTS_DIR / "labels.csv"
+                        records.append(
+                            {
+                                "video_id": vid_id,
+                                "track_id": track_id,
+                                "start_frame": window_frames[0],
+                                "end_frame": window_frames[-1],
+                                "label": label,
+                                "split": split,
+                                "file": file_ref,
+                            }
+                        )
+
+                    i += sequence_stride
+    finally:
+        for fh in csv_files:
+            fh.close()
+
+    labels_csv = out / "labels.csv"
     _write_labels_csv(labels_csv, records)
     return labels_csv
 
@@ -344,6 +417,72 @@ def _build_sequence(
         seq[i] = _normalize_keypoints(best_kpts, jaad_bbox)
 
     return seq
+
+
+def convert_sequences_csv_to_npy(keypoints_dir: Path) -> Path:
+    """Convert CSV-format keypoint sequences back to per-file npy format.
+
+    Reads ``<keypoints_dir>/sequences_train.csv`` and
+    ``<keypoints_dir>/sequences_val.csv`` (written by ``build_keypoint_dataset``
+    with ``save_csv=True``) and writes one ``.npy`` file per row into
+    ``<keypoints_dir>/sequences/{train|val}/``.
+
+    Also rewrites ``labels.csv`` with updated ``file`` column paths so the
+    trainer can load sequences without any code changes.
+
+    Args:
+        keypoints_dir: Root of the keypoint dataset (e.g. data/processed/keypoints_3s/).
+
+    Returns:
+        Path to the rewritten labels.csv.
+    """
+    labels_csv = keypoints_dir / "labels.csv"
+    if not labels_csv.exists():
+        raise FileNotFoundError(f"labels.csv not found in {keypoints_dir}")
+
+    # Determine sequence shape from the CSV header
+    updated_records: list[dict] = []
+
+    with open(labels_csv, newline="") as f:
+        reader = csv.DictReader(f)
+        records = list(reader)
+
+    for split in ("train", "val"):
+        csv_path = keypoints_dir / f"sequences_{split}.csv"
+        if not csv_path.exists():
+            continue
+
+        seq_dir = keypoints_dir / "sequences" / split
+        seq_dir.mkdir(parents=True, exist_ok=True)
+
+        with open(csv_path, newline="") as f:
+            reader = csv.reader(f)
+            header = next(reader)
+            n_keypoint_cols = len(header) - 5  # strip vid_id, track_id, start, end, label
+            n_kpts = n_keypoint_cols // 2       # each keypoint has x and y
+            T = n_kpts // 17
+
+            for row in reader:
+                vid_id, track_id, start_frame, _end_frame, _label = row[:5]
+                flat = np.array([float(v) for v in row[5:]], dtype=np.float32)
+                seq = flat.reshape(T, 17, 2)
+
+                seq_name = f"{vid_id}_{track_id}_{int(start_frame):06d}.npy"
+                seq_path = seq_dir / seq_name
+                np.save(seq_path, seq)
+
+    # Rebuild labels.csv with npy file paths
+    for rec in records:
+        split = rec["split"]
+        vid_id = rec["video_id"]
+        track_id = rec["track_id"]
+        start_frame = int(rec["start_frame"])
+        seq_name = f"{vid_id}_{track_id}_{start_frame:06d}.npy"
+        rec["file"] = str(Path("sequences") / split / seq_name)
+        updated_records.append(rec)
+
+    _write_labels_csv(labels_csv, updated_records)
+    return labels_csv
 
 
 def _write_labels_csv(path: Path, records: list[dict]) -> None:

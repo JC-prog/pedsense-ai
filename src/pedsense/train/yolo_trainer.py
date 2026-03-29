@@ -11,6 +11,7 @@ from ultralytics import YOLO
 from pedsense.config import (
     BASE_MODELS_DIR,
     DETECTOR_MODELS_DIR,
+    DETECTOR_POSE_MODELS_DIR,
     FRAMES_DIR,
     POSE_DIR,
     PROCESSED_DIR,
@@ -228,7 +229,7 @@ def train_yolo_pose(
             f"Pose dataset not found at {data_yaml}. Run 'pedsense preprocess pose' first."
         )
 
-    DETECTOR_MODELS_DIR.mkdir(parents=True, exist_ok=True)
+    DETECTOR_POSE_MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     prefix = name if name else "yolo-pose"
@@ -247,11 +248,11 @@ def train_yolo_pose(
         imgsz=imgsz,
         patience=patience,
         device=device,
-        project=str(DETECTOR_MODELS_DIR),
+        project=str(DETECTOR_POSE_MODELS_DIR),
         name=output_name,
     )
 
-    return DETECTOR_MODELS_DIR / output_name
+    return DETECTOR_POSE_MODELS_DIR / output_name
 
 
 def train_yolo_resume(
@@ -280,6 +281,9 @@ def train_yolo_resume(
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_name = f"{model_dir.name}_resumed_{timestamp}"
 
+    # Save resumed model alongside the original (same parent dir, works for any sub-folder)
+    project_dir = model_dir.parent
+
     model = YOLO(str(last_pt))
     model.train(
         data=data_path,
@@ -287,8 +291,8 @@ def train_yolo_resume(
         batch=batch_size,
         imgsz=imgsz,
         device=device,
-        project=str(DETECTOR_MODELS_DIR),
+        project=str(project_dir),
         name=output_name,
     )
 
-    return DETECTOR_MODELS_DIR / output_name
+    return project_dir / output_name

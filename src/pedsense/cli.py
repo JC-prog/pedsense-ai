@@ -17,10 +17,19 @@ def setup():
         POSE_DIR,
         BASE_MODELS_DIR,
         DETECTOR_MODELS_DIR,
-        CLASSIFIER_MODELS_DIR,
+        DETECTOR_POSE_MODELS_DIR,
+        CLASSIFIER_LSTM_MODELS_DIR,
+        CLASSIFIER_STGCN_MODELS_DIR,
     )
 
-    for folder in [RAW_DIR, PROCESSED_DIR, FRAMES_DIR, YOLO_DIR, RESNET_DIR, POSE_DIR, BASE_MODELS_DIR, DETECTOR_MODELS_DIR, CLASSIFIER_MODELS_DIR]:
+    for folder in [
+        RAW_DIR, PROCESSED_DIR, FRAMES_DIR, YOLO_DIR, RESNET_DIR, POSE_DIR,
+        BASE_MODELS_DIR,
+        DETECTOR_MODELS_DIR,
+        DETECTOR_POSE_MODELS_DIR,
+        CLASSIFIER_LSTM_MODELS_DIR,
+        CLASSIFIER_STGCN_MODELS_DIR,
+    ]:
         folder.mkdir(parents=True, exist_ok=True)
 
     console.print("[bold green]Project structure verified![/bold green]")
@@ -77,7 +86,7 @@ def preprocess(
     pose_variant: str = typer.Option(
         "yolo11n-pose",
         "--pose-variant",
-        help="YOLO-Pose model for keypoint extraction: yolo11n-pose, yolo11s-pose, yolo11m-pose. Applies to: pose.",
+        help="YOLO-Pose model for keypoint extraction: a variant name (yolo11n-pose, yolo11s-pose, yolo11m-pose) or a path to a trained .pt file (e.g. models/detector/my_pose_model_.../weights/best.pt). Applies to: pose, keypoints.",
     ),
     conf: float = typer.Option(
         0.25,
@@ -108,13 +117,87 @@ def preprocess(
             "Default: 1.0 second. Applies to: keypoints."
         ),
     ),
+    keypoints_dir: str = typer.Option(
+        None,
+        "--keypoints-dir",
+        help=(
+            "Output directory for keypoint sequences. Default: data/processed/keypoints/. "
+            "Set a different path per horizon to avoid overwriting, e.g. "
+            "'data/processed/keypoints_3s'. Applies to: keypoints."
+        ),
+    ),
+    save_csv: bool = typer.Option(
+        False,
+        "--csv/--no-csv",
+        help=(
+            "Save sequences as CSV rows instead of individual .npy files. "
+            "Use 'pedsense convert-sequences' afterwards to convert back to npy "
+            "for training. Applies to: keypoints."
+        ),
+    ),
+    dataset_name: str = typer.Option(
+        None,
+        "--name",
+        help="Dataset folder name. Creates data/processed/{name}/. Required when step=dataset.",
+    ),
+    dataset_mode: str = typer.Option(
+        None,
+        "--mode",
+        help=(
+            "Annotation mode for step=dataset: "
+            "'pedestrian' (YOLO bounding-box labels), "
+            "'keypoint' (per-frame skeleton CSVs, no label), or "
+            "'crossing_keypoint' (per-frame skeletons with crossing label)."
+        ),
+    ),
+    with_frames: bool = typer.Option(
+        False,
+        "--with-frames",
+        help="Extract frames from clips before building the dataset. Applies to: dataset.",
+    ),
+    split: str = typer.Option(
+        "70/15/15",
+        "--split",
+        help=(
+            "Train/test/val split ratios as three integers summing to 100 "
+            "(e.g. '70/15/15'). Applies to: dataset."
+        ),
+    ),
+    pose_model: str = typer.Option(
+        "yolo11n-pose",
+        "--pose-model",
+        help=(
+            "YOLO-Pose variant name (e.g. 'yolo11n-pose', 'yolo11m-pose') or path to a "
+            "trained .pt file (e.g. models/detector/my_pose_model_.../weights/best.pt). "
+            "Applies to: dataset --mode keypoint, dataset --mode crossing_keypoint."
+        ),
+    ),
+    horizon: int = typer.Option(
+        30,
+        "--horizon",
+        help=(
+            "Number of frames before crossing_point to label as crossing (label=1). "
+            "Applies to: dataset --mode crossing_keypoint. "
+            "Ignored if --horizon-seconds is set."
+        ),
+    ),
+    horizon_seconds: float = typer.Option(
+        None,
+        "--horizon-seconds",
+        help=(
+            "Convenience alternative to --horizon. Automatically converts seconds to frames "
+            "using the extracted FPS from meta.json. "
+            "E.g. --horizon-seconds 1.0 at 10fps gives --horizon 10. "
+            "Applies to: dataset --mode crossing_keypoint."
+        ),
+    ),
 ):
     """Extract frames and prepare datasets from raw JAAD data."""
     from pedsense.processing import extract_frames, convert_to_yolo, convert_to_resnet, extract_pose_labels, build_keypoint_dataset
     from pedsense.processing.annotations import ATTRIBUTE_LABELS, TRACK_LABELS
 
-    if step not in ("all", "frames", "yolo", "resnet", "pose", "keypoints"):
-        console.print(f"[bold red]Unknown step '{step}'. Use: frames, yolo, resnet, pose, keypoints, or all.[/bold red]")
+    if step not in ("all", "frames", "yolo", "resnet", "pose", "keypoints", "dataset"):
+        console.print(f"[bold red]Unknown step '{step}'. Use: frames, yolo, resnet, pose, keypoints, dataset, or all.[/bold red]")
         raise typer.Exit(1)
 
     if step in ("all", "yolo", "resnet") and attribute not in ATTRIBUTE_LABELS:
@@ -158,9 +241,36 @@ def preprocess(
         data_yaml = extract_pose_labels(model_variant=pose_variant, video_id=video_id, conf=conf)
         console.print(f"[bold green]Pose dataset ready: {data_yaml}[/bold green]")
 
+    if step == "dataset":
+        if not dataset_name:
+            console.print("[bold red]--name is required for step=dataset.[/bold red]")
+            raise typer.Exit(1)
+        if dataset_mode not in ("pedestrian", "keypoint", "crossing_keypoint"):
+            console.print("[bold red]--mode must be pedestrian, keypoint, or crossing_keypoint.[/bold red]")
+            raise typer.Exit(1)
+        if with_frames:
+            console.print("[bold cyan]Extracting frames...[/bold cyan]")
+            extract_frames(video_id=video_id, fps=fps)
+        console.print(f"[bold cyan]Building dataset '{dataset_name}' (mode={dataset_mode})...[/bold cyan]")
+        from pedsense.processing.dataset_builder import build_dataset
+        out_dir = build_dataset(
+            name=dataset_name,
+            mode=dataset_mode,
+            split_ratio=split,
+            video_id=video_id,
+            pose_model=pose_model,
+            horizon=horizon,
+            horizon_seconds=horizon_seconds,
+            conf=conf,
+            iou_threshold=iou_threshold,
+        )
+        console.print(f"[bold green]Dataset ready: {out_dir}[/bold green]")
+
     if step == "keypoints":
         console.print(f"[bold cyan]Building keypoint sequence dataset ({pose_variant})...[/bold cyan]")
+        from pathlib import Path as _Path
         from pedsense.config import SEQUENCE_LENGTH, SEQUENCE_STRIDE
+        out_dir = _Path(keypoints_dir) if keypoints_dir else None
         labels_csv = build_keypoint_dataset(
             model_variant=pose_variant,
             conf=conf,
@@ -169,8 +279,14 @@ def preprocess(
             sequence_stride=sequence_stride if sequence_stride is not None else SEQUENCE_STRIDE,
             prediction_horizon=prediction_horizon,
             video_id=video_id,
+            output_dir=out_dir,
+            save_csv=save_csv,
         )
-        console.print(f"[bold green]Keypoint dataset ready: {labels_csv}[/bold green]")
+        if save_csv:
+            console.print(f"[bold green]Keypoint CSV sequences ready in: {labels_csv.parent}[/bold green]")
+            console.print("[dim]Run 'pedsense convert-sequences' to convert to npy for training.[/dim]")
+        else:
+            console.print(f"[bold green]Keypoint dataset ready: {labels_csv}[/bold green]")
 
 
 @app.command()
@@ -252,6 +368,25 @@ def train(
         "--aug-fliplr",
         help="Horizontal flip probability 0-1. Default 0.5. Set to 0 if pedestrian direction matters. Applies to: yolo, yolo-detector.",
     ),
+    train_keypoints_dir: str = typer.Option(
+        None,
+        "--keypoints-dir",
+        help=(
+            "Keypoint dataset directory to train on. Default: data/processed/keypoints/. "
+            "Set to a horizon-specific directory, e.g. data/processed/keypoints_3s. "
+            "Applies to: keypoint-lstm."
+        ),
+    ),
+    train_sequence_length: int = typer.Option(
+        5,
+        "--sequence-length",
+        help="Number of consecutive frames per LSTM input window (default: 5). Applies to: keypoint-lstm.",
+    ),
+    train_sequence_stride: int = typer.Option(
+        1,
+        "--sequence-stride",
+        help="Step between consecutive windows over a track's frames (default: 1). Applies to: keypoint-lstm.",
+    ),
 ):
     """Train a model for pedestrian crossing intent prediction."""
     from pedsense.train import train_yolo, train_yolo_detector, train_yolo_pose, train_resnet_lstm, train_hybrid, train_keypoint_lstm
@@ -274,7 +409,9 @@ def train(
         output = train_hybrid(name=name, yolo_model=yolo_model, epochs=epochs, batch_size=batch_size, learning_rate=lr or 1e-4, yolo_epochs=yolo_epochs, device=device)
     elif model == "keypoint-lstm":
         console.print("[bold yellow]Training KeypointLSTM model...[/bold yellow]")
-        output = train_keypoint_lstm(name=name, epochs=epochs, batch_size=batch_size, learning_rate=lr or 1e-3, hidden_size=hidden_size, device=device)
+        from pathlib import Path as _Path
+        kdir = _Path(train_keypoints_dir) if train_keypoints_dir else None
+        output = train_keypoint_lstm(name=name, epochs=epochs, batch_size=batch_size, learning_rate=lr or 1e-3, hidden_size=hidden_size, device=device, keypoints_dir=kdir, sequence_length=train_sequence_length, sequence_stride=train_sequence_stride)
     else:
         console.print(f"[bold red]Unknown model: {model}. Use 'yolo', 'yolo-detector', 'yolo-pose', 'resnet-lstm', 'hybrid', or 'keypoint-lstm'.[/bold red]")
         raise typer.Exit(1)
@@ -289,11 +426,12 @@ def resume():
     import yaml
     from pathlib import Path
     from rich.table import Table
-    from pedsense.config import DETECTOR_MODELS_DIR
+    from pedsense.config import DETECTOR_MODELS_DIR, DETECTOR_POSE_MODELS_DIR
     from pedsense.train.yolo_trainer import train_yolo_resume
 
+    _resume_dirs = [d for base in (DETECTOR_MODELS_DIR, DETECTOR_POSE_MODELS_DIR) if base.exists() for d in base.iterdir()]
     models = []
-    for d in sorted(DETECTOR_MODELS_DIR.iterdir()):
+    for d in sorted(_resume_dirs):
         if not d.is_dir():
             continue
         if not (d / "weights" / "last.pt").exists():
@@ -329,7 +467,7 @@ def resume():
         })
 
     if not models:
-        console.print("[bold red]No resumable YOLO models found in models/custom/.[/bold red]")
+        console.print("[bold red]No resumable YOLO models found in models/detector/ or models/detector-pose/.[/bold red]")
         raise typer.Exit(1)
 
     table = Table(title="Resumable YOLO Models")
@@ -379,6 +517,32 @@ def demo(
 
     console.print("[bold magenta]Launching Gradio demo...[/bold magenta]")
     launch_demo(model_path=model_path, port=port)
+
+
+@app.command(name="convert-sequences")
+def convert_sequences(
+    keypoints_dir: str = typer.Argument(
+        ...,
+        help="Path to the keypoint dataset directory containing sequences_train.csv / sequences_val.csv and labels.csv (e.g. data/processed/keypoints_3s).",
+    ),
+):
+    """Convert CSV keypoint sequences to npy files for training.
+
+    Use this after 'preprocess keypoints --csv' to convert the compact CSV output
+    back into individual .npy sequence files expected by the trainer — without
+    modifying any trainer code.
+    """
+    from pathlib import Path
+    from pedsense.processing import convert_sequences_csv_to_npy
+
+    kdir = Path(keypoints_dir)
+    if not kdir.exists():
+        console.print(f"[bold red]Directory not found: {kdir}[/bold red]")
+        raise typer.Exit(1)
+
+    console.print(f"[bold cyan]Converting CSV sequences in {kdir} to npy...[/bold cyan]")
+    labels_csv = convert_sequences_csv_to_npy(kdir)
+    console.print(f"[bold green]Done. Trainer-ready dataset at: {labels_csv}[/bold green]")
 
 
 if __name__ == "__main__":
